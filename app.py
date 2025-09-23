@@ -704,7 +704,7 @@ CONTACT_PAGE = """
 
     <div class="bg-gray-800 rounded-lg p-8 shadow-2xl border border-gray-700">
       <form method="POST" class="space-y-6" novalidate>
-        {{ csrf_token() }}
+        {{ form.hidden_tag() }}
         
         <!-- Name Field -->
         <div>
@@ -749,7 +749,7 @@ CONTACT_PAGE = """
               {% endfor %}
             </div>
           {% endif %}
-          <div class="mt-1 text-gray-500 text-sm">
+          <div class="mt-1 text-gray-500 text-sm" id="character-counter">
             Minimum 10 characters, maximum 2000 characters
           </div>
         </div>
@@ -797,18 +797,17 @@ CONTACT_PAGE = """
     // Add character counter for message field
     document.addEventListener('DOMContentLoaded', function() {
       const messageField = document.getElementById('message');
+      const counter = document.getElementById('character-counter');
       const maxLength = 2000;
       
-      // Create counter element
-      const counter = document.createElement('div');
-      counter.className = 'text-gray-500 text-sm mt-1';
-      counter.style.textAlign = 'right';
-      messageField.parentNode.appendChild(counter);
-      
       function updateCounter() {
-        const remaining = maxLength - messageField.value.length;
-        counter.textContent = `${messageField.value.length}/${maxLength} characters`;
-        if (remaining < 100) {
+        const currentLength = messageField.value.length;
+        const remaining = maxLength - currentLength;
+        counter.textContent = `${currentLength}/${maxLength} characters`;
+        
+        if (currentLength < 10) {
+          counter.className = 'text-red-400 text-sm mt-1';
+        } else if (remaining < 100) {
           counter.className = 'text-yellow-400 text-sm mt-1';
         } else if (remaining < 0) {
           counter.className = 'text-red-400 text-sm mt-1';
