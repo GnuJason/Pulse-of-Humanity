@@ -260,6 +260,13 @@ def add_security_headers(resp):
     resp.headers["X-Frame-Options"] = "DENY"
     resp.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
     resp.headers["Strict-Transport-Security"] = "max-age=63072000; includeSubDomains; preload"
+    
+    # Prevent browser caching for dynamic content
+    if request.endpoint in ['index', 'population']:
+        resp.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+        resp.headers["Pragma"] = "no-cache"
+        resp.headers["Expires"] = "0"
+    
     return resp
 
 # Contact Form Class
