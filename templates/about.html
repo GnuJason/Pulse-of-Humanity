@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>About | Pulse of Humanity</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    body { font-family: 'Inter', sans-serif; }
+  </style>
+</head>
+<body class="bg-gray-900 text-white min-h-screen">
+  <div class="container mx-auto px-4 py-8 max-w-4xl">
+    <header class="text-center mb-8">
+      <h1 class="text-4xl font-bold mb-4">
+        <a href="/" class="text-cyan-400 hover:text-cyan-300 transition-colors">
+          Pulse of Humanity
+        </a>
+      </h1>
+      <h2 class="text-2xl font-semibold text-gray-100">About This Project</h2>
+    </header>
+
+    <div class="bg-gray-800 rounded-lg p-8 shadow-2xl border border-gray-700 mb-8">
+      <div class="prose prose-invert max-w-none">
+        <h3 class="text-xl font-semibold text-cyan-400 mb-4">Project Overview</h3>
+        <p class="text-gray-300 mb-6 leading-relaxed">
+          Pulse of Humanity is a real-time world population visualization that brings the abstract concept of global demographics to life. 
+          This interactive web application displays the current estimated world population with live updates, helping visitors understand 
+          the scale and pace of human population growth.
+        </p>
+
+        <h3 class="text-xl font-semibold text-cyan-400 mb-4">Features & Technology</h3>
+        <div class="grid md:grid-cols-2 gap-6 mb-6">
+          <div>
+            <h4 class="text-lg font-medium text-white mb-3">Core Features</h4>
+            <ul class="text-gray-300 space-y-2">
+              <li class="flex items-start">
+                <span class="text-cyan-400 mr-2">•</span>
+                Real-time population counter with smooth animations
+              </li>
+              <li class="flex items-start">
+                <span class="text-cyan-400 mr-2">•</span>
+                Interactive world map with geographic data visualization
+              </li>
+              <li class="flex items-start">
+                <span class="text-cyan-400 mr-2">•</span>
+                Professional contact system with spam protection
+              </li>
+              <li class="flex items-start">
+                <span class="text-cyan-400 mr-2">•</span>
+                Mobile-responsive design for all devices
+              </li>
+            </ul>
+          </div>
+          <div>
+            <h4 class="text-lg font-medium text-white mb-3">Technology Stack</h4>
+            <ul class="text-gray-300 space-y-2">
+              <li class="flex items-start">
+                <span class="text-cyan-400 mr-2">•</span>
+                Backend: Flask 3.x with Python
+              </li>
+              <li class="flex items-start">
+                <span class="text-cyan-400 mr-2">•</span>
+                Frontend: HTML5, Tailwind CSS, JavaScript
+              </li>
+              <li class="flex items-start">
+                <span class="text-cyan-400 mr-2">•</span>
+                Data: Natural Earth geographic datasets
+              </li>
+              <li class="flex items-start">
+                <span class="text-cyan-400 mr-2">•</span>
+                Security: CSRF protection, rate limiting, HTTPS
+              </li>
+            </ul>
+          </div>
+        </div>
+
+        <h3 class="text-xl font-semibold text-cyan-400 mb-4">Data Sources & Methodology</h3>
+        <p class="text-gray-300 mb-6 leading-relaxed">
+          Population estimates are calculated using established demographic models and real-time algorithms that account for 
+          global birth and death rates. The visualization incorporates data from reputable sources including government census 
+          data and international demographic organizations.
+        </p>
+
+        <p class="text-gray-300 mb-6 leading-relaxed">
+          Geographic data is provided by Natural Earth, a public domain map dataset that offers high-quality, 
+          cartographically accurate data for creating beautiful and informative visualizations.
+        </p>
+
+        <h3 class="text-xl font-semibold text-cyan-400 mb-4">About the Creator</h3>
+        <div class="bg-gray-700 rounded-lg p-6 border border-gray-600">
+          <p class="text-gray-300 leading-relaxed">
+            This project was created as an educational and artistic exploration of global demographics and web development. 
+            The goal is to make complex demographic data accessible and engaging through interactive visualization, 
+            helping people better understand our shared human experience on this planet.
+          </p>
+          <p class="text-gray-300 mt-4 leading-relaxed">
+            Built with a focus on accessibility, security, and performance, this application demonstrates modern web 
+            development practices while serving as a meaningful tool for understanding global population dynamics.
+          </p>
+        </div>
+
+        <h3 class="text-xl font-semibold text-cyan-400 mb-4 mt-8">Open Source & Contributing</h3>
+        <p class="text-gray-300 mb-4 leading-relaxed">
+          Pulse of Humanity is an open-source project released under the MIT License. We welcome contributions, 
+          suggestions, and feedback from the community. Whether you're interested in improving the population algorithms, 
+          enhancing the user interface, or adding new features, your input is valuable.
+        </p>
+        <p class="text-gray-300 leading-relaxed">
+          Feel free to <a href="/contact" class="text-cyan-400 hover:text-cyan-300 transition-colors">reach out</a> 
+          if you have questions, ideas, or would like to collaborate on this project.
+        </p>
+      </div>
+    </div>
+
+    <!-- Navigation Links -->
+    <div class="text-center space-x-6">
+      <a href="/" class="text-cyan-400 hover:text-cyan-300 transition-colors">
+        ← Back to Home
+      </a>
+      <a href="/contact" class="text-cyan-400 hover:text-cyan-300 transition-colors">
+        Contact Us
+      </a>
+      <a href="/privacy" class="text-cyan-400 hover:text-cyan-300 transition-colors">
+        Privacy Policy
+      </a>
+    </div>
+  </div>
+</body>
+</html>
