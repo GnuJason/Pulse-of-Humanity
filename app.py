@@ -203,12 +203,20 @@ limiter = Limiter(
 
 API_KEY = os.getenv("API_NINJAS_KEY")
 DEBUG = os.getenv("FLASK_DEBUG") == "1"
-PORT = int(os.getenv("PORT", "5000"))
+PORT = int(os.getenv("PORT", "10000"))  # Default to 10000 for Render
 
 @app.before_request
 def force_https():
-    """Redirect HTTP requests to HTTPS, except in debug mode."""
-    if not DEBUG and request.endpoint and request.url.startswith('http://'):
+    """Redirect HTTP requests to HTTPS in production environments only."""
+    # Only redirect to HTTPS if:
+    # 1. Not in debug mode AND
+    # 2. Not localhost/127.0.0.1 (for local testing) AND  
+    # 3. Request is HTTP AND
+    # 4. Has a valid endpoint
+    if (not DEBUG and 
+        request.endpoint and 
+        request.url.startswith('http://') and
+        not any(host in request.host for host in ['localhost', '127.0.0.1', '0.0.0.0'])):
         # Get the HTTPS version of the URL
         https_url = request.url.replace('http://', 'https://', 1)
         return redirect(https_url, code=301)
@@ -922,7 +930,27 @@ def contact():
 
 @app.route("/health")
 def health():
-    return jsonify({"status": "ok"}), 200
+    """Enhanced health check endpoint for Render monitoring"""
+    try:
+        # Test state loading
+        with STATE_LOCK:
+            state = load_state()
+        
+        # Basic health check response
+        health_status = {
+            "status": "healthy",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "version": "1.0.0",
+            "population": int(state.get("population", 0)),
+            "debug_mode": DEBUG
+        }
+        return jsonify(health_status), 200
+    except Exception as e:
+        return jsonify({
+            "status": "unhealthy",
+            "error": str(e),
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }), 500
 
 @app.route("/about")
 def about():

@@ -222,3 +222,19 @@ logs/
 *.pid
 .sass-cache/
 node_modules/
+
+# Project-specific files
+*.zip
+*.tar.gz
+state.json
+test_*.py
+run_dev.py
+
+# Shapefile data (large binary files)
+*.shp
+*.shx
+*.dbf
+*.prj
+*.cpg
+*.README.html
+*.VERSION.txt
