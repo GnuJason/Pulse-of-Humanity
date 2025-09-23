@@ -132,6 +132,7 @@ def load_state():
     return state
 
 def save_state(state):
+    """Save state to JSON file with robust error handling for cloud deployment"""
     try:
         # Ensure the directory exists
         STATE_PATH.parent.mkdir(parents=True, exist_ok=True)
