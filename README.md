@@ -7,7 +7,7 @@ A real-time world population visualization Flask web application that displays t
 ## Features
 
 - **Real-time Population Counter**: Live-updating world population display with smooth animations
-- **Interactive World Map**: Visualize global demographic data with interactive geographic components
+- **Interactive World Map**: Visualize global demographic data with interactive geographic components using embedded SVG
 - **Contact Form**: Professional contact system with:
   - Server-side validation (Flask-WTF)
   - Math captcha spam protection
@@ -21,7 +21,7 @@ A real-time world population visualization Flask web application that displays t
   - Rate limiting with Flask-Limiter
   - CSRF protection
 - **Responsive Design**: Mobile-first design with Tailwind CSS
-- **Natural Earth Data Integration**: High-quality geographic data visualization
+- **Embedded SVG World Map**: Interactive continent-based visualization
 
 ## Technology Stack
 
@@ -29,7 +29,7 @@ A real-time world population visualization Flask web application that displays t
 - **Frontend**: HTML5, Tailwind CSS, JavaScript
 - **Email**: SMTP integration (Mailfence)
 - **Security**: Flask-WTF, Flask-Limiter, comprehensive headers
-- **Data**: Natural Earth geographic datasets
+- **Visualization**: Embedded SVG world map with interactive continents
 - **Deployment**: Gunicorn-ready with environment configuration
 
 ## Quick Start
@@ -168,9 +168,9 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## Acknowledgments
 
-- **Natural Earth**: Public domain map dataset for geographic visualizations
 - **Flask Community**: For the excellent web framework and extensions
 - **Tailwind CSS**: For the utility-first CSS framework
+- **World Map Data**: Interactive SVG world map for geographic visualizations
 
 ## Support
 
