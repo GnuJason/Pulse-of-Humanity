@@ -10,7 +10,7 @@ from wtforms.validators import DataRequired, Email, Length
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
-STATE_PATH = Path("/home/gnujason/pulse-of-humanity/state.json")
+STATE_PATH = Path("state.json")
 STATE_LOCK = threading.Lock()
 
 # ---------------------------
@@ -42,13 +42,19 @@ def get_population_api():
         r = requests.get(
             "https://api.api-ninjas.com/v1/worldpopulation",
             headers={"X-Api-Key": api_key, **UA_HEADERS},
-            timeout=6,
+            timeout=10,  # Increased timeout for Render
         )
         if r.ok:
             data = r.json()
-            return data.get("world_population")
+            pop = data.get("world_population")
+            if pop and isinstance(pop, (int, float)) and pop > 0:
+                return int(pop)
+            else:
+                print(f"[WARN] API Ninjas returned invalid population data: {data}")
         else:
             print(f"[ERROR] API Ninjas HTTP {r.status_code}: {r.text[:200]}")
+    except requests.exceptions.Timeout:
+        print("[ERROR] API Ninjas timeout")
     except Exception as e:
         print("[ERROR] API Ninjas exception:", e)
     return None
@@ -126,10 +132,23 @@ def load_state():
     return state
 
 def save_state(state):
-    tmp = STATE_PATH.with_suffix(".tmp")
-    with tmp.open("w") as f:
-        json.dump(state, f)
-    tmp.replace(STATE_PATH)
+    try:
+        # Ensure the directory exists
+        STATE_PATH.parent.mkdir(parents=True, exist_ok=True)
+        
+        # Use a more robust temporary file approach
+        tmp = STATE_PATH.with_suffix(".tmp")
+        with tmp.open("w") as f:
+            json.dump(state, f)
+        tmp.replace(STATE_PATH)
+    except Exception as e:
+        print(f"[ERROR] Failed to save state: {e}")
+        # If we can't save to temp file, try direct write as fallback
+        try:
+            with STATE_PATH.open("w") as f:
+                json.dump(state, f)
+        except Exception as e2:
+            print(f"[ERROR] Failed direct state save: {e2}")
 
 BIRTHS_PER_SEC = 4.3
 DEATHS_PER_SEC = 1.8
@@ -836,28 +855,53 @@ def current_population_and_today():
 
 @app.route("/")
 def index():
-    with STATE_LOCK:
-        state = load_state()
-    return render_template_string(
-        HTML_PAGE,
-        population=int(state["population"]),
-        births_today=int(state["births_today"]),
-        deaths_today=int(state["deaths_today"]),
-        last_updated=state["last_updated"],
-        BIRTHS_PER_SEC=BIRTHS_PER_SEC,
-        DEATHS_PER_SEC=DEATHS_PER_SEC,
-        NET_PER_SEC=NET_PER_SEC,
-        continents_json={
-            name: {
-                "population": c["population"],
-                "births_today": c["births_today"],
-                "deaths_today": c["deaths_today"],
-                "births_per_sec": BASE_CONTINENTS[name]["births_per_sec"],
-                "deaths_per_sec": BASE_CONTINENTS[name]["deaths_per_sec"]
+    try:
+        with STATE_LOCK:
+            state = load_state()
+        return render_template_string(
+            HTML_PAGE,
+            population=int(state["population"]),
+            births_today=int(state["births_today"]),
+            deaths_today=int(state["deaths_today"]),
+            last_updated=state["last_updated"],
+            BIRTHS_PER_SEC=BIRTHS_PER_SEC,
+            DEATHS_PER_SEC=DEATHS_PER_SEC,
+            NET_PER_SEC=NET_PER_SEC,
+            continents_json={
+                name: {
+                    "population": c["population"],
+                    "births_today": c["births_today"],
+                    "deaths_today": c["deaths_today"],
+                    "births_per_sec": BASE_CONTINENTS[name]["births_per_sec"],
+                    "deaths_per_sec": BASE_CONTINENTS[name]["deaths_per_sec"]
+                }
+                for name, c in state["continents"].items()
             }
-            for name, c in state["continents"].items()
+        )
+    except Exception as e:
+        print(f"[ERROR] Index route failed: {e}")
+        # Return a minimal fallback page
+        fallback_continents = {
+            name: {
+                "population": data["population"],
+                "births_today": 0,
+                "deaths_today": 0,
+                "births_per_sec": data["births_per_sec"],
+                "deaths_per_sec": data["deaths_per_sec"]
+            }
+            for name, data in BASE_CONTINENTS.items()
         }
-    )
+        return render_template_string(
+            HTML_PAGE,
+            population=8000000000,
+            births_today=372000,
+            deaths_today=155000,
+            last_updated="Fallback data - service initializing",
+            BIRTHS_PER_SEC=BIRTHS_PER_SEC,
+            DEATHS_PER_SEC=DEATHS_PER_SEC,
+            NET_PER_SEC=NET_PER_SEC,
+            continents_json=fallback_continents
+        )
 
 @app.route("/population")
 def population():
