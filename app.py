@@ -360,29 +360,69 @@ HTML_PAGE = """
       transition: fill 0.2s ease;
     }
     .continent:hover path { fill: rgba(0,255,0,0.28); }
+    
+    /* Mobile-optimized styles */
+    @media (max-width: 768px) {
+      .world-map svg { 
+        height: auto; 
+        max-height: 40vh; /* Limit height on mobile */
+      }
+      .continent path {
+        stroke-width: 1.5; /* Thicker strokes for easier touch targets */
+      }
+      #region-tooltip {
+        font-size: 0.875rem; /* Larger text on mobile */
+        padding: 0.75rem;
+        max-width: calc(100vw - 20px); /* Prevent overflow */
+      }
+      .counter {
+        font-size: clamp(2rem, 8vw, 8rem); /* Smaller on very small screens */
+      }
+    }
+    
+    /* Improve touch targets */
+    .continent {
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    .continent:hover, .continent:active {
+      filter: brightness(1.2);
+    }
+    
+    /* High contrast mode support */
+    @media (prefers-contrast: high) {
+      .continent path {
+        stroke: #ffffff;
+        stroke-width: 2;
+      }
+    }
   </style>
 </head>
 <body class="bg-black text-white min-h-screen flex flex-col items-center justify-center overflow-hidden relative">
   <div id="vanta-bg" class="absolute inset-0 z-0 opacity-20"></div>
 
-  <main class="z-10 text-center px-4 w-full">
-    <h1 class="text-xl md:text-2xl font-bold text-gray-400 mb-2 tracking-wider">CURRENT WORLD POPULATION</h1>
+  <main class="z-10 text-center px-4 w-full max-w-6xl mx-auto">
+    <h1 class="text-lg sm:text-xl md:text-2xl font-bold text-gray-400 mb-2 tracking-wider">CURRENT WORLD POPULATION</h1>
     <div class="counter" id="population-counter" aria-live="polite">Loading...</div>
-    <div class="text-gray-500 text-sm mt-4 flex items-center justify-center gap-2">
-      <i data-feather="clock" class="w-4 h-4"></i>
+    <div class="text-gray-500 text-xs sm:text-sm mt-4 flex items-center justify-center gap-2">
+      <i data-feather="clock" class="w-3 h-3 sm:w-4 sm:h-4"></i>
       <span id="last-updated">Updating...</span>
     </div>
-    <div class="text-lg mt-4">
-      <span id="births-today" class="text-green-400 font-bold">0</span>
-      <span class="text-gray-400">births today</span>
+    
+    <!-- Mobile-optimized stats layout -->
+    <div class="grid grid-cols-2 gap-3 sm:gap-4 mt-4 max-w-md mx-auto">
+      <div class="bg-white bg-opacity-10 backdrop-blur-sm rounded-lg p-3 sm:p-4 min-h-16 flex flex-col justify-center">
+        <span id="births-today" class="text-green-400 font-bold text-lg sm:text-xl">0</span>
+        <span class="text-gray-400 text-xs sm:text-sm">births today</span>
+      </div>
+      <div class="bg-white bg-opacity-10 backdrop-blur-sm rounded-lg p-3 sm:p-4 min-h-16 flex flex-col justify-center">
+        <span id="deaths-today" class="text-red-400 font-bold text-lg sm:text-xl">0</span>
+        <span class="text-gray-400 text-xs sm:text-sm">deaths today</span>
+      </div>
     </div>
-    <div class="text-lg">
-      <span id="deaths-today" class="text-red-400 font-bold">0</span>
-      <span class="text-gray-400">deaths today</span>
-    </div>
-   <div id="world-map" class="mt-8 flex justify-center relative z-10">
-  <!-- FIX: Only a single <svg>! -->
-  <svg viewBox="0 0 2000 1001" xmlns="http://www.w3.org/2000/svg" class="w-full max-w-5xl" stroke-linecap="round" stroke-linejoin="round">
+   <div id="world-map" class="mt-6 sm:mt-8 flex justify-center relative z-10 world-map">
+  <!-- Mobile-optimized SVG world map -->
+  <svg viewBox="0 0 2000 1001" xmlns="http://www.w3.org/2000/svg" class="w-full max-w-full sm:max-w-5xl h-auto" stroke-linecap="round" stroke-linejoin="round" role="img" aria-label="Interactive world map showing population data by continent">
     <!-- All continent <g class="continent" id="..."> ... </g> blocks go here -->
     <g class="continent" id="Oceania">
       <path d="M 1999 572 1999 574.7 1995.5 576.1 1991.9 577.3 1991.2 575.2 1994 574.1 1995.7 573.8 1999 572 Z M 1988.6 580 1990 579.1 1991.9 580.7 1991 583.6 1987.5 584.4 1984.5 583.7 1983.9 581.2 1986.1 579.3 1988.6 580 Z M 2.1 571.8 1.5 574.5 1 574.7 1 572 2.1 571.8 Z M 1782.6 497.3 1792.2 501.1 1802.4 504.3 1806.3 507.1 1809.4 509.9 1810.2 513.2 1819.4 516.6 1820.8 519.6 1815.7 520.2 1816.9 523.9 1821.9 527.5 1825.5 533.4 1828.7 533.2 1828.4 535.7 1832.7 536.6 1831.1 537.7 1836.9 540 1836.3 541.6 1832.7 542 1831.3 540.5 1826.5 539.9 1820.9 539.1 1816.6 535.5 1813.5 532.5 1810.6 527.6 1803.3 525.2 1798.6 526.8 1795.2 528.6 1795.9 532.7 1791.6 534.6 1788.5 533.7 1782.7 533.5 1782.6 515.4 1782.6 497.3 Z M 1847.2 503.2 1849.3 505 1849.9 507.8 1848.2 509.3 1847.1 506 1845.9 503.9 1843.3 502.1 1840.2 499.7 1836.2 498.1 1837.7 496.7 1840.7 498.3 1842.6 499.5 1844.9 500.8 1847.2 503.2 Z M 1839.7 515.3 1836.7 516.6 1833.8 517.9 1830.9 517.9 1826.3 516.3 1823.2 514.8 1823.6 513 1828.6 513.9 1831.6 513.4 1832.5 510.8 1833.3 510.6 1833.8 513.6 1837 513.1 1838.5 511.2 1841.6 509.3 1841 506 1844.4 505.9 1845.5 506.8 1845.4 509.9 1843.5 513.3 1840.6 513.7 1839.7 515.3 Z M 1858.9 512.5 1860.6 513.8 1863.3 517.3 1865.9 519.2 1865.1 520.7 1863.6 521.3 1861.2 519.1 1858.7 515.6 1857.6 511.4 1858.3 510.9 1858.9 512.5 Z M 1928.1 571.1 1931.5 574.3 1929.7 575 1927.8 572.6 1928.1 571.1 Z M 1925.7 569.8 1924.9 568.3 1924.8 564 1927.4 565.7 1928.3 570.2 1926.9 569.5 1925.7 569.8 Z M 1920.1 599.9 1924.6 603.3 1927.5 605.9 1925.4 607.2 1922.4 605.7 1918.4 603.2 1914.8 600.2 1911.1 596.3 1910.4 594.5 1912.8 594.5 1915.9 596.4 1918.3 598.3 1920.1 599.9 Z M 1899.8 541 1901.3 543 1897.4 542.9 1895.3 539.5 1898.6 540.8 1899.8 541 Z M 1897.3 536.1 1896.5 537.2 1892.4 532.4 1891.2 529 1893.1 529 1895.1 533.5 1897.3 536.1 Z M 1892.7 537.7 1890.6 537.8 1887.2 537.2 1886 536.4 1886.4 534.2 1890 535 1891.8 536.2 1892.7 537.7 Z M 1886 527.4 1887.3 529.1 1887.5 530.3 1883.2 527.9 1880.2 525.9 1878.1 524.1 1878.9 523.5 1881.5 524.8 1886 527.4 Z M 1872.1 521.8 1874.3 523.6 1873.2 524 1870.8 522.7 1868.5 520.4 1868.8 519.5 1872.1 521.8 Z M 1981.7 705.2 1979.6 708.2 1976.9 712 1972.6 714.2 1971.6 712.8 1969.3 712 1972.5 707.4 1970.7 704.4 1964.7 702.1 1964.9 700.1 1968.9 698.2 1969.8 693.9 1969.6 690.3 1967.3 686.6 1967.5 685.6 1964.8 683.3 1960.5 678.4 1958.1 674.5 1960.2 674.1 1963.2 677.1 1967.5 678.6 1969.1 683.5 1973.1 689.4 1973.2 685.6 1975.7 687.1 1976.6 691.3 1981 693.1 1984.8 693.6 1988 691.4 1990.8 692.1 1989.4 697 1987.7 700.2 1983.5 700.1 1982 701.8 1982.5 704.2 1981.7 705.2 Z M 1941.7 724.6 1946.4 721.7 1949.7 718.8 1952.2 714.7 1954.3 713.3 1955.1 710.2 1959 707.6 1960.3 710 1961.5 712.3 1965.5 710 1967.1 712.4 1967.1 714.7 1965 717.3 1961.4 721.3 1958.5 723.6 1960.6 726.3 1956.3 726.3 1951.6 728.4 1950.1 732 1946.9 737.7 1942.6 740.1 1939.8 741.7 1934.7 741.6 1931.1 739.8 1925.1 739.4 1924.1 737.3 1927.1 733.2 1934.1 727.8 1937.7 726.7 1941.7 724.6 Z M 1819.7 709.4 1823 709.7 1823.4 716.3 1821.5 718.2 1820.9 722.7 1819 721.2 1815.1 725 1814 724.7 1810.6 724.6 1807.1 719.8 1806.4 716.2 1803.2 711.3 1803.3 708.8 1807 709.3 1812.3 711.2 1815.3 710.4 1819.7 709.4 Z M 1700.1 661.7 1694.2 664.5 1689.4 665.8 1688.4 668.7 1686.3 671 1681.6 671.1 1678.1 671.6 1673.2 670.6 1669.2 671.2 1665.4 671.4 1662.1 674.4 1660.5 674.1 1657.7 675.7 1655 677.5 1651 677.3 1647.3 677.3 1641.4 673.7 1638.4 672.7 1638.5 669.5 1641.3 668.7 1642.2 667.5 1642 665.5 1642.7 661.6 1642.1 658.3 1639.1 652.7 1638.2 649.5 1638.5 646.4 1636.3 642.8 1636.1 641.1 1633.7 638.9 1633 634.6 1629.8 630.2 1629 627.8 1631.5 630.2 1629.6 625.1 1632.3 626.7 1634 628.8 1633.9 626 1631.2 621.6 1630.6 619.9 1629.3 618.2 1629.9 615 1631.1 613.6 1631.8 610.8 1631.2 607.6 1633.5 603.6 1634 607.8 1636.3 604 1640.8 602.2 1643.5 599.8 1647.7 597.8 1650.3 597.3 1651.8 598 1656.2 595.9 1659.5 595.3 1660.4 594.1 1661.9 593.6 1664.9 593.7 1670.8 592.1 1673.8 589.6 1675.2 586.7 1678.4 583.9 1678.7 581.6 1678.8 578.6 1682.7 573.9 1685.1 578.7 1687.4 577.6 1685.4 575 1687.2 572.3 1689.6 573.5 1690.3 569.3 1693.3 566.5 1694.7 564.3 1697.5 563.4 1697.6 561.8 1700 562.5 1700.1 561.1 1702.5 560.3 1705.2 559.6 1709.3 562.1 1712.4 565.4 1715.9 565.4 1719.4 565.9 1718.2 562.9 1720.9 558.4 1723.4 557 1722.5 555.6 1724.9 552.4 1728.3 550.5 1731.1 551.1 1735.8 550.1 1735.7 547.3 1731.6 545.4 1734.6 544.6 1738.3 546 1741.2 548.3 1745.9 549.7 1747.5 549.1 1750.9 550.8 1754.1 549.3 1756.2 549.7 1757.5 548.7 1760.1 551.4 1758.6 554.4 1756.5 556.6 1754.6 556.8 1755.2 559 1753.6 561.8 1751.6 564.5 1752 566.1 1756.4 569.2 1760.7 570.9 1763.6 572.9 1767.6 576.1 1769.1 576.1 1772.1 577.6 1772.9 579.3 1778.2 581.2 1781.9 579.3 1782.9 576.3 1784.1 573.8 1784.8 570.8 1786.4 566.4 1785.7 563.7 1786.1 562.1 1785.4 558.9 1786.2 554.7 1787.2 553.6 1786.4 551.7 1787.7 548.8 1788.8 545.7 1788.9 544.2 1791 542.1 1792.5 544.8 1792.9 548.3 1794.3 548.9 1794.5 551.3 1796.5 554.1 1797 557.2 1796.8 559.3 1798.8 563.6 1802.3 561.5 1804.2 563.9 1806.8 566 1806.3 568.5 1807.4 573.3 1808.3 576 1809.7 576.7 1811.2 581.4 1810.7 584.3 1812.5 588.1 1818.5 591 1822.4 593.6 1826.1 596 1825.4 597.4 1828.6 600.9 1830.7 606.9 1832.9 605.6 1835.2 608.1 1836.5 607.2 1837.5 613.1 1841.4 616.5 1844 618.6 1848.3 623.1 1849.9 627.6 1850 630.7 1849.7 634.2 1852.3 638.9 1852 643.8 1851 646.4 1849.5 651.3 1849.6 654.5 1848.5 658.5 1846.1 663.5 1842 666.2 1840 670.5 1838.1 673.3 1836.5 678.1 1834.3 680.8 1832.9 685 1832.2 688.8 1832.5 690.6 1829.3 692.5 1823.1 692.7 1818 695 1815.4 697.1 1812.1 699.5 1807.5 697.1 1804.1 696.1 1804.9 693.2 1801.9 694.2 1797 698.3 1792.2 696.8 1789.1 695.9 1785.9 695.5 1780.5 693.9 1777 690.5 1775.9 686.2 1774.6 683.4 1771.9 681.2 1766.6 680.5 1768.4 677.8 1767.1 673.7 1764.3 677.5 1759.4 678.6 1762.3 675.5 1763.1 672.3 1765.3 669.6 1764.8 665.5 1760.3 670.2 1756.9 672.1 1754.7 676.5 1750.4 674.2 1750.6 671.3 1747.1 667.3 1744.2 665.2 1745.2 663.9 1738.1 660.5 1734.2 660.4 1728.9 657.7 1718.9 658.2 1711.7 660.2 1705.4 662 1700.1 661.7 Z" fill-rule="evenodd"/>
@@ -408,14 +448,14 @@ HTML_PAGE = """
   </svg>
 </div>
 
-    <div id="region-tooltip" class="hidden fixed bg-black bg-opacity-70 text-green-400 p-2 rounded text-sm pointer-events-none z-50"></div>
+    <div id="region-tooltip" class="hidden fixed bg-black bg-opacity-80 text-green-400 p-3 rounded text-sm pointer-events-none z-50 max-w-xs"></div>
   </main>
 
-  <footer class="z-10 mt-auto py-4 px-6 rounded-t-lg attribution">
-    <div class="text-xs text-gray-400 text-center">
-      <p>Data from <a href="https://api-ninjas.com/api/worldpopulation" target="_blank" class="underline hover:text-cyan-400">API-Ninjas</a> • 
-      <a href="https://www.worldometers.info/world-population/" target="_blank" class="underline hover:text-cyan-400">Worldometer</a> • 
-      <a href="/about" class="underline hover:text-cyan-400">About</a> • 
+  <footer class="z-10 mt-auto py-3 sm:py-4 px-4 sm:px-6 rounded-t-lg attribution">
+    <div class="text-xs text-gray-400 text-center max-w-4xl mx-auto">
+      <p class="mb-1">Data from <a href="https://api-ninjas.com/api/worldpopulation" target="_blank" class="underline hover:text-cyan-400">API-Ninjas</a> • 
+      <a href="https://www.worldometers.info/world-population/" target="_blank" class="underline hover:text-cyan-400">Worldometer</a></p>
+      <p class="mb-1"><a href="/about" class="underline hover:text-cyan-400">About</a> • 
       <a href="/privacy" class="underline hover:text-cyan-400">Privacy</a> • 
       <a href="/contact" class="underline hover:text-cyan-400">Contact Us</a></p>
       <p class="mt-1">© <span id="current-year"></span> Pulse of Humanity</p>
@@ -425,6 +465,9 @@ HTML_PAGE = """
   <script src="https://cdn.jsdelivr.net/npm/vanta@latest/dist/vanta.globe.min.js"></script>
   <script>
   document.addEventListener("DOMContentLoaded", function () {
+    // Set current year
+    document.getElementById('current-year').textContent = new Date().getFullYear();
+    
     const continents = {{ continents_json | tojson | safe }};
     const svgToDataKey = {
       "Africa": "Africa",
@@ -465,30 +508,85 @@ HTML_PAGE = """
       `;
     }
 
+    // Enhanced mobile-responsive tooltip handling
+    function showTooltip(e, regionId) {
+      updateTooltip(regionId);
+      
+      // Get viewport dimensions
+      const viewportWidth = window.innerWidth;
+      const viewportHeight = window.innerHeight;
+      
+      // Get touch/mouse position
+      const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+      const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+      
+      // Calculate tooltip position with boundary checks
+      let left = clientX + 10;
+      let top = clientY + 10;
+      
+      // Adjust for mobile screens
+      if (viewportWidth < 768) {
+        // On mobile, position tooltip at top of screen
+        left = 10;
+        top = 10;
+      } else {
+        // Desktop positioning with boundary checks
+        const tooltipRect = tooltip.getBoundingClientRect();
+        if (left + tooltipRect.width > viewportWidth) {
+          left = clientX - tooltipRect.width - 10;
+        }
+        if (top + tooltipRect.height > viewportHeight) {
+          top = clientY - tooltipRect.height - 10;
+        }
+      }
+      
+      tooltip.style.left = left + 'px';
+      tooltip.style.top = top + 'px';
+      tooltip.classList.remove('hidden');
+    }
+
     document.querySelectorAll('.continent').forEach(cont => {
+      // Mouse events for desktop
       cont.addEventListener('mousemove', e => {
-        updateTooltip(e.currentTarget.id);
-        tooltip.style.left = e.pageX + 10 + 'px';
-        tooltip.style.top = e.pageY + 10 + 'px';
-        tooltip.classList.remove('hidden');
+        showTooltip(e, e.currentTarget.id);
       });
       cont.addEventListener('mouseleave', () => {
         tooltip.classList.add('hidden');
       });
+      
+      // Touch events for mobile
+      cont.addEventListener('touchstart', e => {
+        e.preventDefault(); // Prevent mouse events
+        showTooltip(e, e.currentTarget.id);
+      });
+      cont.addEventListener('touchmove', e => {
+        e.preventDefault();
+        showTooltip(e, e.currentTarget.id);
+      });
+      cont.addEventListener('touchend', () => {
+        // Keep tooltip visible for a short time on mobile
+        setTimeout(() => {
+          tooltip.classList.add('hidden');
+        }, 2000);
+      });
     });
 
+    // Responsive VANTA.js globe with mobile optimization
+    const isMobile = window.innerWidth <= 768;
+    
     VANTA.GLOBE({
       el: "#vanta-bg",
-      mouseControls: true,
-      touchControls: true,
+      mouseControls: !isMobile, // Disable on mobile for performance
+      touchControls: isMobile,
       minHeight: 200.00,
       minWidth: 200.00,
-      scale: 1.0,
-      scaleMobile: 1.0,
+      scale: isMobile ? 0.8 : 1.0, // Smaller scale on mobile
+      scaleMobile: 0.8,
       color: 0x00ffcc,
       color2: 0x00ff00,
       backgroundColor: 0x000000,
-      size: 1.0
+      size: isMobile ? 0.8 : 1.0, // Smaller size on mobile for performance
+      points: isMobile ? 8.0 : 12.0 // Fewer points on mobile
     });
 
     function renderLoop(now) {
@@ -533,6 +631,37 @@ CONTACT_PAGE = """
   <style>
     body { font-family: 'Inter', sans-serif; }
     .form-input:focus { box-shadow: 0 0 0 3px rgba(0, 255, 204, 0.3); }
+    
+    /* Mobile optimizations */
+    @media (max-width: 768px) {
+      .container {
+        padding-left: 1rem;
+        padding-right: 1rem;
+      }
+      .form-input, button[type="submit"] {
+        min-height: 48px; /* Ensure 48px minimum touch target */
+        font-size: 16px; /* Prevent zoom on iOS */
+      }
+      textarea.form-input {
+        min-height: 120px;
+      }
+      .captcha-container {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+      .captcha-container input {
+        margin-top: 0.5rem;
+        width: 100%;
+        max-width: 200px;
+      }
+    }
+    
+    /* Improve readability */
+    @media (prefers-contrast: high) {
+      .form-input {
+        border-width: 2px;
+      }
+    }
   </style>
 </head>
 <body class="bg-gray-900 text-white min-h-screen">
@@ -574,7 +703,7 @@ CONTACT_PAGE = """
           <label for="name" class="block text-sm font-medium text-gray-300 mb-2">
             Name <span class="text-red-400">*</span>
           </label>
-          {{ form.name(class="form-input w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-cyan-400 transition-colors", placeholder="Your full name", id="name") }}
+          {{ form.name(class="form-input w-full px-4 py-4 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-cyan-400 transition-colors text-base", placeholder="Your full name", id="name") }}
           {% if form.name.errors %}
             <div class="mt-1 text-red-400 text-sm" role="alert">
               {% for error in form.name.errors %}
@@ -589,7 +718,7 @@ CONTACT_PAGE = """
           <label for="email" class="block text-sm font-medium text-gray-300 mb-2">
             Email <span class="text-red-400">*</span>
           </label>
-          {{ form.email(class="form-input w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-cyan-400 transition-colors", placeholder="your.email@example.com", id="email", type="email") }}
+          {{ form.email(class="form-input w-full px-4 py-4 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-cyan-400 transition-colors text-base", placeholder="your.email@example.com", id="email", type="email") }}
           {% if form.email.errors %}
             <div class="mt-1 text-red-400 text-sm" role="alert">
               {% for error in form.email.errors %}
@@ -604,7 +733,7 @@ CONTACT_PAGE = """
           <label for="message" class="block text-sm font-medium text-gray-300 mb-2">
             Message <span class="text-red-400">*</span>
           </label>
-          {{ form.message(class="form-input w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-cyan-400 transition-colors resize-y", placeholder="Tell us what's on your mind...", rows="6", id="message") }}
+          {{ form.message(class="form-input w-full px-4 py-4 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-cyan-400 transition-colors resize-y text-base", placeholder="Tell us what's on your mind...", rows="6", id="message") }}
           {% if form.message.errors %}
             <div class="mt-1 text-red-400 text-sm" role="alert">
               {% for error in form.message.errors %}
@@ -626,7 +755,9 @@ CONTACT_PAGE = """
             <div class="text-lg font-semibold text-cyan-400 mb-2">
               Please solve: <span class="text-white">{{ captcha_question }} = ?</span>
             </div>
-            {{ form.captcha_answer(class="form-input w-32 px-3 py-2 bg-gray-600 border border-gray-500 rounded text-white placeholder-gray-400 focus:outline-none focus:border-cyan-400 transition-colors", placeholder="Answer", id="captcha_answer", type="number") }}
+            <div class="captcha-container flex items-center">
+              {{ form.captcha_answer(class="form-input px-3 py-3 bg-gray-600 border border-gray-500 rounded text-white placeholder-gray-400 focus:outline-none focus:border-cyan-400 transition-colors text-base", placeholder="Answer", id="captcha_answer", type="number", style="width: 120px;") }}
+            </div>
           </div>
           {% if form.captcha_answer.errors %}
             <div class="mt-1 text-red-400 text-sm" role="alert">
@@ -639,7 +770,7 @@ CONTACT_PAGE = """
 
         <!-- Submit Button -->
         <div class="pt-4">
-          <button type="submit" class="w-full bg-cyan-600 hover:bg-cyan-700 text-white font-semibold py-3 px-6 rounded-lg transition-colors focus:outline-none focus:ring-4 focus:ring-cyan-500 focus:ring-opacity-50">
+          <button type="submit" class="w-full bg-cyan-600 hover:bg-cyan-700 text-white font-semibold py-4 px-6 rounded-lg transition-colors focus:outline-none focus:ring-4 focus:ring-cyan-500 focus:ring-opacity-50 min-h-12 text-base">
             Send Message
           </button>
         </div>
