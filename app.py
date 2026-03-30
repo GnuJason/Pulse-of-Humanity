@@ -1,4 +1,4 @@
-from flask import Flask, jsonify, render_template_string, make_response, request, flash, redirect, url_for, session
+from flask import Flask, jsonify, render_template, render_template_string, make_response, request, flash, redirect, url_for, session
 import requests, re, os, time, json, threading, datetime as dt, smtplib, random
 from datetime import datetime, timezone
 from pathlib import Path
@@ -28,6 +28,7 @@ BASE_CONTINENTS = {
 
 _CACHE = {"population": None, "source": None, "ts": 0.0}
 CACHE_TTL = int(os.getenv("POP_CACHE_TTL", "60"))  # seconds
+SYNC_INTERVAL_SECONDS = int(os.getenv("POP_SYNC_INTERVAL", "3600"))
 
 UA_HEADERS = {
     "User-Agent": "Mozilla/5.0 (PulseOfHumanity/1.0; +https://example.com)",
@@ -95,61 +96,157 @@ def get_population_cached():
     _CACHE.update({"population": pop, "source": src, "ts": now})
     return pop, src
 
-def load_state():
-    if STATE_PATH.exists():
-        with STATE_PATH.open("r") as f:
-            state = json.load(f)
-        if "continents" not in state or set(state["continents"]) != set(BASE_CONTINENTS):
-            state["continents"] = {
-                name: {
-                    "population": BASE_CONTINENTS[name]["population"],
-                    "births_today": 0,
-                    "deaths_today": 0
-                }
-                for name in BASE_CONTINENTS
-            }
-        return state
 
-    pop, _ = get_population_cached()
-    if not pop:
-        pop = 8_123_456_789  # fallback only once
-    state = {
-        "population": int(pop),
-        "births_today": 0,
-        "deaths_today": 0,
-        "last_midnight": dt.datetime.utcnow().date().isoformat(),
-        "last_updated": dt.datetime.utcnow().isoformat() + "Z",
-        "continents": {
-            name: {
-                "population": data["population"],
-                "births_today": 0,
-                "deaths_today": 0
-            }
-            for name, data in BASE_CONTINENTS.items()
-        }
+def utc_now():
+  return datetime.now(timezone.utc)
+
+
+def isoformat_z(value):
+  return value.astimezone(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
+
+
+def parse_timestamp(value):
+  if not value:
+    return utc_now()
+  return datetime.fromisoformat(value.replace("Z", "+00:00")).astimezone(timezone.utc)
+
+
+def build_initial_state(now=None, baseline_population=None, source="fallback"):
+  now = now or utc_now()
+  if baseline_population is None:
+    baseline_population, source = get_population_cached()
+  return {
+    "version": 2,
+    "baseline_population": int(baseline_population),
+    "baseline_timestamp": isoformat_z(now),
+    "source": source,
+    "last_sync_timestamp": isoformat_z(now),
+    "continents": {
+      name: {"baseline_population": data["population"]}
+      for name, data in BASE_CONTINENTS.items()
+    },
+  }
+
+
+def migrate_state(state):
+  baseline_timestamp = state.get("last_updated") or isoformat_z(utc_now())
+  migrated = {
+    "version": 2,
+    "baseline_population": int(state.get("population", 8_123_456_789)),
+    "baseline_timestamp": baseline_timestamp,
+    "source": state.get("source", "migrated"),
+    "last_sync_timestamp": state.get("last_sync_timestamp", baseline_timestamp),
+    "continents": {},
+  }
+  legacy_continents = state.get("continents", {})
+  for name, data in BASE_CONTINENTS.items():
+    continent_state = legacy_continents.get(name, {})
+    migrated["continents"][name] = {
+      "baseline_population": float(continent_state.get("population", data["population"]))
     }
+  return migrated
+
+
+def ensure_state_shape(state):
+  if state.get("version") != 2 or "baseline_population" not in state:
+    state = migrate_state(state)
+
+  state.setdefault("source", "fallback")
+  state.setdefault("baseline_timestamp", isoformat_z(utc_now()))
+  state.setdefault("last_sync_timestamp", state["baseline_timestamp"])
+  state.setdefault("continents", {})
+
+  for name, data in BASE_CONTINENTS.items():
+    continent_state = state["continents"].setdefault(name, {})
+    continent_state.setdefault("baseline_population", data["population"])
+
+  return state
+
+
+def calculate_current_state(state, now=None):
+  now = now or utc_now()
+  baseline_timestamp = parse_timestamp(state["baseline_timestamp"])
+  elapsed_seconds = max(0.0, (now - baseline_timestamp).total_seconds())
+  midnight = now.replace(hour=0, minute=0, second=0, microsecond=0)
+  seconds_today = max(0.0, (now - midnight).total_seconds())
+
+  population = max(0.0, float(state["baseline_population"]) + (NET_PER_SEC * elapsed_seconds))
+  current_state = {
+    "population": population,
+    "births_today": BIRTHS_PER_SEC * seconds_today,
+    "deaths_today": DEATHS_PER_SEC * seconds_today,
+    "last_updated": isoformat_z(now),
+    "source": state.get("source", "fallback"),
+    "baseline_timestamp": state["baseline_timestamp"],
+    "last_sync_timestamp": state.get("last_sync_timestamp", state["baseline_timestamp"]),
+    "continents": {},
+  }
+
+  for name, data in BASE_CONTINENTS.items():
+    baseline_population = float(state["continents"][name]["baseline_population"])
+    births_per_sec = data["births_per_sec"]
+    deaths_per_sec = data["deaths_per_sec"]
+    current_state["continents"][name] = {
+      "population": max(0.0, baseline_population + ((births_per_sec - deaths_per_sec) * elapsed_seconds)),
+      "births_today": births_per_sec * seconds_today,
+      "deaths_today": deaths_per_sec * seconds_today,
+      "births_per_sec": births_per_sec,
+      "deaths_per_sec": deaths_per_sec,
+    }
+
+  return current_state
+
+
+def serialize_current_state(current_state):
+  return {
+    "population": int(current_state["population"]),
+    "births_today": int(current_state["births_today"]),
+    "deaths_today": int(current_state["deaths_today"]),
+    "last_updated": current_state["last_updated"],
+    "source": current_state["source"],
+    "baseline_timestamp": current_state["baseline_timestamp"],
+    "last_sync_timestamp": current_state["last_sync_timestamp"],
+    "continents": {
+      name: {
+        "population": int(data["population"]),
+        "births_today": int(data["births_today"]),
+        "deaths_today": int(data["deaths_today"]),
+        "births_per_sec": data["births_per_sec"],
+        "deaths_per_sec": data["deaths_per_sec"],
+      }
+      for name, data in current_state["continents"].items()
+    },
+  }
+
+def load_state():
+  if STATE_PATH.exists():
+    with STATE_PATH.open("r") as f:
+      state = json.load(f)
+    state = ensure_state_shape(state)
     save_state(state)
     return state
 
+  pop, source = get_population_cached()
+  state = build_initial_state(now=utc_now(), baseline_population=pop, source=source)
+  save_state(state)
+  return state
+
+
 def save_state(state):
-    """Save state to JSON file with robust error handling for cloud deployment"""
+  """Save state to JSON file with robust error handling for cloud deployment"""
+  try:
+    STATE_PATH.parent.mkdir(parents=True, exist_ok=True)
+    tmp = STATE_PATH.with_suffix(".tmp")
+    with tmp.open("w") as f:
+      json.dump(state, f)
+    tmp.replace(STATE_PATH)
+  except Exception as e:
+    print(f"[ERROR] Failed to save state: {e}")
     try:
-        # Ensure the directory exists
-        STATE_PATH.parent.mkdir(parents=True, exist_ok=True)
-        
-        # Use a more robust temporary file approach
-        tmp = STATE_PATH.with_suffix(".tmp")
-        with tmp.open("w") as f:
-            json.dump(state, f)
-        tmp.replace(STATE_PATH)
-    except Exception as e:
-        print(f"[ERROR] Failed to save state: {e}")
-        # If we can't save to temp file, try direct write as fallback
-        try:
-            with STATE_PATH.open("w") as f:
-                json.dump(state, f)
-        except Exception as e2:
-            print(f"[ERROR] Failed direct state save: {e2}")
+      with STATE_PATH.open("w") as f:
+        json.dump(state, f)
+    except Exception as e2:
+      print(f"[ERROR] Failed direct state save: {e2}")
 
 BIRTHS_PER_SEC = 4.3
 DEATHS_PER_SEC = 1.8
@@ -159,49 +256,44 @@ def midnight_utc():
     now = dt.datetime.utcnow()
     return dt.datetime(now.year, now.month, now.day)
 
-last_sync_hour = None
+def get_current_state(now=None):
+    with STATE_LOCK:
+        state = load_state()
+        return calculate_current_state(state, now=now)
+
+
+def refresh_population_baseline(force=False, now=None):
+    now = now or utc_now()
+    with STATE_LOCK:
+        state = load_state()
+        last_sync = parse_timestamp(state.get("last_sync_timestamp", state["baseline_timestamp"]))
+        if not force and (now - last_sync).total_seconds() < SYNC_INTERVAL_SECONDS:
+            return False
+
+        current_state = calculate_current_state(state, now=now)
+        population, source = get_population_cached()
+        if not population:
+            return False
+
+        state["baseline_population"] = int(population)
+        state["baseline_timestamp"] = isoformat_z(now)
+        state["last_sync_timestamp"] = isoformat_z(now)
+        state["source"] = source
+        state["continents"] = {
+            name: {"baseline_population": data["population"]}
+            for name, data in current_state["continents"].items()
+        }
+        save_state(state)
+        return True
+
+
 def updater_loop():
-    global last_sync_hour
-    while True:
-        time.sleep(1)
-        with STATE_LOCK:
-            state = load_state()
-
-            today_str = dt.datetime.utcnow().date().isoformat()
-            for name, data in BASE_CONTINENTS.items():
-                c_state = state["continents"][name]
-                c_state["population"] += data["births_per_sec"] - data["deaths_per_sec"]
-                c_state["births_today"] += data["births_per_sec"]
-                c_state["deaths_today"] += data["deaths_per_sec"]
-
-            if state.get("last_midnight") != today_str:
-                state["births_today"] = 0
-                state["deaths_today"] = 0
-                state["last_midnight"] = today_str
-                for c_state in state["continents"].values():
-                    c_state["births_today"] = 0
-                    c_state["deaths_today"] = 0
-
-            current_hour = int(time.time()) // 3600
-            if last_sync_hour != current_hour and dt.datetime.utcnow().minute == 5:
-                pop, _ = get_population_cached()
-                if pop:
-                    net_rate = BIRTHS_PER_SEC - DEATHS_PER_SEC
-                    if pop > state["population"] or net_rate < 0:
-                        state["population"] = pop
-                last_sync_hour = current_hour
-
-            net_change = BIRTHS_PER_SEC - DEATHS_PER_SEC
-            if net_change >= 0:
-                state["population"] += net_change
-            else:
-                state["population"] = max(0, state["population"] + net_change)
-
-            state["births_today"] += BIRTHS_PER_SEC
-            state["deaths_today"] += DEATHS_PER_SEC
-            state["last_updated"] = dt.datetime.utcnow().isoformat() + "Z"
-
-            save_state(state)
+  while True:
+    try:
+      refresh_population_baseline()
+    except Exception as e:
+      print(f"[ERROR] Updater refresh failed: {e}")
+    time.sleep(min(SYNC_INTERVAL_SECONDS, 30))
 
 def start_updater():
     t = threading.Thread(target=updater_loop, daemon=True)
@@ -514,13 +606,15 @@ HTML_PAGE = """
       "Antarctica": "Antarctica"
     };
 
-    const birthsPerSec = {{ BIRTHS_PER_SEC }};
-    const deathsPerSec = {{ DEATHS_PER_SEC }};
-    const netPerSec = {{ NET_PER_SEC }};
-    let pop = {{ population }};
-    let births = {{ births_today }};
-    let deaths = {{ deaths_today }};
-    let lastTime = performance.now();
+    const liveStateUrl = "{{ url_for('live_state') }}";
+    let displayState = {
+      population: {{ population }},
+      births_today: {{ births_today }},
+      deaths_today: {{ deaths_today }},
+      continents: JSON.parse(JSON.stringify(continents))
+    };
+    let targetState = JSON.parse(JSON.stringify(displayState));
+    let currentLastUpdated = {{ last_updated | tojson }};
 
     const tooltip = document.getElementById('region-tooltip');
 
@@ -624,29 +718,75 @@ HTML_PAGE = """
       points: isMobile ? 8.0 : 12.0 // Fewer points on mobile
     });
 
-    function renderLoop(now) {
-      const delta = (now - lastTime) / 1000;
-      lastTime = now;
+    function easeValue(current, target) {
+      const delta = target - current;
+      if (Math.abs(delta) < 1) {
+        return target;
+      }
+      return current + (delta * 0.18);
+    }
 
-      pop += netPerSec * delta;
-      births += birthsPerSec * delta;
-      deaths += deathsPerSec * delta;
+    function applyLiveState(snapshot) {
+      targetState.population = snapshot.population;
+      targetState.births_today = snapshot.births_today;
+      targetState.deaths_today = snapshot.deaths_today;
+      currentLastUpdated = snapshot.last_updated;
 
-      document.getElementById('population-counter').textContent = fmt(Math.floor(pop));
-      document.getElementById('births-today').textContent = fmt(Math.floor(births));
-      document.getElementById('deaths-today').textContent = fmt(Math.floor(deaths));
-      document.getElementById('last-updated').textContent =
-        `Last updated: ${new Date().toLocaleTimeString()}`;
+      for (const [name, data] of Object.entries(snapshot.continents)) {
+        if (!targetState.continents[name]) {
+          targetState.continents[name] = data;
+        } else {
+          targetState.continents[name].population = data.population;
+          targetState.continents[name].births_today = data.births_today;
+          targetState.continents[name].deaths_today = data.deaths_today;
+          targetState.continents[name].births_per_sec = data.births_per_sec;
+          targetState.continents[name].deaths_per_sec = data.deaths_per_sec;
+        }
+      }
+    }
 
-      for (const [name, data] of Object.entries(continents)) {
-        data.population += (data.births_per_sec - data.deaths_per_sec) * delta;
-        data.births_today += data.births_per_sec * delta;
-        data.deaths_today += data.deaths_per_sec * delta;
+    async function fetchLiveState() {
+      try {
+        const response = await fetch(liveStateUrl, {
+          headers: { "Accept": "application/json" },
+          cache: "no-store"
+        });
+        if (!response.ok) {
+          throw new Error(`Live state request failed with ${response.status}`);
+        }
+        const snapshot = await response.json();
+        applyLiveState(snapshot);
+      } catch (error) {
+        console.error("Failed to refresh live state", error);
+      }
+    }
+
+    function renderLoop() {
+      displayState.population = easeValue(displayState.population, targetState.population);
+      displayState.births_today = easeValue(displayState.births_today, targetState.births_today);
+      displayState.deaths_today = easeValue(displayState.deaths_today, targetState.deaths_today);
+
+      document.getElementById('population-counter').textContent = fmt(Math.floor(displayState.population));
+      document.getElementById('births-today').textContent = fmt(Math.floor(displayState.births_today));
+      document.getElementById('deaths-today').textContent = fmt(Math.floor(displayState.deaths_today));
+      document.getElementById('last-updated').textContent = `Last updated: ${currentLastUpdated}`;
+
+      for (const [name, data] of Object.entries(targetState.continents)) {
+        if (!displayState.continents[name]) {
+          displayState.continents[name] = JSON.parse(JSON.stringify(data));
+          continue;
+        }
+        displayState.continents[name].population = easeValue(displayState.continents[name].population, data.population);
+        displayState.continents[name].births_today = easeValue(displayState.continents[name].births_today, data.births_today);
+        displayState.continents[name].deaths_today = easeValue(displayState.continents[name].deaths_today, data.deaths_today);
       }
 
+      Object.assign(continents, displayState.continents);
       requestAnimationFrame(renderLoop);
     }
 
+    fetchLiveState();
+    setInterval(fetchLiveState, 1000);
     requestAnimationFrame(renderLoop);
   });
   </script>
@@ -852,68 +992,58 @@ CONTACT_PAGE = """
 """
 
 def current_population_and_today():
-    with STATE_LOCK:
-        state = load_state()
-    return (
-        int(state["population"]),
-        int(state["births_today"]),
-        int(state["deaths_today"]),
-        state["last_updated"]
-    )
+  state = get_current_state()
+  return (
+    int(state["population"]),
+    int(state["births_today"]),
+    int(state["deaths_today"]),
+    state["last_updated"]
+  )
 
 @app.route("/")
 def index():
-    try:
-        with STATE_LOCK:
-            state = load_state()
-        return render_template_string(
-            HTML_PAGE,
-            population=int(state["population"]),
-            births_today=int(state["births_today"]),
-            deaths_today=int(state["deaths_today"]),
-            last_updated=state["last_updated"],
-            BIRTHS_PER_SEC=BIRTHS_PER_SEC,
-            DEATHS_PER_SEC=DEATHS_PER_SEC,
-            NET_PER_SEC=NET_PER_SEC,
-            continents_json={
-                name: {
-                    "population": c["population"],
-                    "births_today": c["births_today"],
-                    "deaths_today": c["deaths_today"],
-                    "births_per_sec": BASE_CONTINENTS[name]["births_per_sec"],
-                    "deaths_per_sec": BASE_CONTINENTS[name]["deaths_per_sec"]
-                }
-                for name, c in state["continents"].items()
-            }
-        )
-    except Exception as e:
-        print(f"[ERROR] Index route failed: {e}")
-        # Return a minimal fallback page
-        fallback_continents = {
-            name: {
-                "population": data["population"],
-                "births_today": 0,
-                "deaths_today": 0,
-                "births_per_sec": data["births_per_sec"],
-                "deaths_per_sec": data["deaths_per_sec"]
-            }
-            for name, data in BASE_CONTINENTS.items()
-        }
-        return render_template_string(
-            HTML_PAGE,
-            population=8000000000,
-            births_today=372000,
-            deaths_today=155000,
-            last_updated="Fallback data - service initializing",
-            BIRTHS_PER_SEC=BIRTHS_PER_SEC,
-            DEATHS_PER_SEC=DEATHS_PER_SEC,
-            NET_PER_SEC=NET_PER_SEC,
-            continents_json=fallback_continents
-        )
+  try:
+    state = serialize_current_state(get_current_state())
+    return render_template_string(
+      HTML_PAGE,
+      population=state["population"],
+      births_today=state["births_today"],
+      deaths_today=state["deaths_today"],
+      last_updated=state["last_updated"],
+      BIRTHS_PER_SEC=BIRTHS_PER_SEC,
+      DEATHS_PER_SEC=DEATHS_PER_SEC,
+      NET_PER_SEC=NET_PER_SEC,
+      continents_json=state["continents"]
+    )
+  except Exception as e:
+    print(f"[ERROR] Index route failed: {e}")
+    fallback_continents = {
+      name: {
+        "population": data["population"],
+        "births_today": 0,
+        "deaths_today": 0,
+        "births_per_sec": data["births_per_sec"],
+        "deaths_per_sec": data["deaths_per_sec"]
+      }
+      for name, data in BASE_CONTINENTS.items()
+    }
+    return render_template_string(
+      HTML_PAGE,
+      population=8000000000,
+      births_today=372000,
+      deaths_today=155000,
+      last_updated="Fallback data - service initializing",
+      BIRTHS_PER_SEC=BIRTHS_PER_SEC,
+      DEATHS_PER_SEC=DEATHS_PER_SEC,
+      NET_PER_SEC=NET_PER_SEC,
+      continents_json=fallback_continents
+    )
 
 @app.route("/population")
 def population():
-    pop, src = get_population_cached()
+    state = serialize_current_state(get_current_state())
+    pop = state["population"]
+    src = state["source"]
     ts = datetime.now(timezone.utc).isoformat(timespec="seconds")
     if src == "api_ninjas":
         print(f"[{ts}] [INFO] Using API Ninjas data: {pop:,}")
@@ -921,7 +1051,12 @@ def population():
         print(f"[{ts}] [INFO] Using Worldometer fallback: {pop:,}")
     else:
         print(f"[{ts}] [WARN] Both sources failed — using hardcoded fallback: {pop:,}")
-    return jsonify({"population": pop, "source": src, "cached": True})
+    return jsonify({"population": pop, "source": src, "cached": True, "last_updated": state["last_updated"]})
+
+
+@app.route("/api/live-state")
+def live_state():
+    return jsonify(serialize_current_state(get_current_state()))
 
 @app.route("/contact", methods=["GET", "POST"])
 @limiter.limit("5 per hour")  # Rate limit for contact form
@@ -981,27 +1116,23 @@ def contact():
 
 @app.route("/health")
 def health():
-    """Enhanced health check endpoint for Render monitoring"""
-    try:
-        # Test state loading
-        with STATE_LOCK:
-            state = load_state()
-        
-        # Basic health check response
-        health_status = {
-            "status": "healthy",
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-            "version": "1.0.0",
-            "population": int(state.get("population", 0)),
-            "debug_mode": DEBUG
-        }
-        return jsonify(health_status), 200
-    except Exception as e:
-        return jsonify({
-            "status": "unhealthy",
-            "error": str(e),
-            "timestamp": datetime.now(timezone.utc).isoformat()
-        }), 500
+  """Enhanced health check endpoint for Render monitoring"""
+  try:
+    state = serialize_current_state(get_current_state())
+    health_status = {
+      "status": "healthy",
+      "timestamp": datetime.now(timezone.utc).isoformat(),
+      "version": "1.0.0",
+      "population": int(state.get("population", 0)),
+      "debug_mode": DEBUG
+    }
+    return jsonify(health_status), 200
+  except Exception as e:
+    return jsonify({
+      "status": "unhealthy",
+      "error": str(e),
+      "timestamp": datetime.now(timezone.utc).isoformat()
+    }), 500
 
 @app.route("/about")
 def about():
