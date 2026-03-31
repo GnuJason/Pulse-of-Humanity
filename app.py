@@ -29,6 +29,8 @@ BASE_CONTINENTS = {
 _CACHE = {"population": None, "source": None, "ts": 0.0}
 CACHE_TTL = int(os.getenv("POP_CACHE_TTL", "60"))  # seconds
 SYNC_INTERVAL_SECONDS = int(os.getenv("POP_SYNC_INTERVAL", "3600"))
+STATE_SCHEMA_VERSION = 3
+LIVE_STATE_LIMIT = "120 per minute; 5000 per hour"
 
 UA_HEADERS = {
     "User-Agent": "Mozilla/5.0 (PulseOfHumanity/1.0; +https://example.com)",
@@ -111,56 +113,189 @@ def parse_timestamp(value):
   return datetime.fromisoformat(value.replace("Z", "+00:00")).astimezone(timezone.utc)
 
 
+def normalize_named_distribution(raw_values):
+  total = sum(max(0.0, float(raw_values.get(name, 0.0))) for name in BASE_CONTINENTS)
+  if total <= 0:
+    equal_share = 1.0 / len(BASE_CONTINENTS)
+    return {name: equal_share for name in BASE_CONTINENTS}
+
+  normalized = {
+    name: max(0.0, float(raw_values.get(name, 0.0))) / total
+    for name in BASE_CONTINENTS
+  }
+  last_name = list(BASE_CONTINENTS)[-1]
+  normalized[last_name] += 1.0 - sum(normalized.values())
+  return normalized
+
+
+def build_share_model(populations=None, birth_rates=None, death_rates=None):
+  populations = populations or {
+    name: data["population"]
+    for name, data in BASE_CONTINENTS.items()
+  }
+  birth_rates = birth_rates or {
+    name: data["births_per_sec"]
+    for name, data in BASE_CONTINENTS.items()
+  }
+  death_rates = death_rates or {
+    name: data["deaths_per_sec"]
+    for name, data in BASE_CONTINENTS.items()
+  }
+
+  baseline_shares = normalize_named_distribution(populations)
+  birth_shares = normalize_named_distribution(birth_rates)
+  death_shares = normalize_named_distribution(death_rates)
+
+  return {
+    name: {
+      "baseline_share": baseline_shares[name],
+      "birth_share": birth_shares[name],
+      "death_share": death_shares[name],
+    }
+    for name in BASE_CONTINENTS
+  }
+
+
+def canonicalize_share_state(continents_state):
+  default_share_model = build_share_model()
+  baseline_shares = normalize_named_distribution({
+    name: continents_state.get(name, {}).get(
+      "baseline_share",
+      default_share_model[name]["baseline_share"],
+    )
+    for name in BASE_CONTINENTS
+  })
+  birth_shares = normalize_named_distribution({
+    name: continents_state.get(name, {}).get(
+      "birth_share",
+      default_share_model[name]["birth_share"],
+    )
+    for name in BASE_CONTINENTS
+  })
+  death_shares = normalize_named_distribution({
+    name: continents_state.get(name, {}).get(
+      "death_share",
+      default_share_model[name]["death_share"],
+    )
+    for name in BASE_CONTINENTS
+  })
+
+  return {
+    name: {
+      "baseline_share": baseline_shares[name],
+      "birth_share": birth_shares[name],
+      "death_share": death_shares[name],
+    }
+    for name in BASE_CONTINENTS
+  }
+
+
+def reconcile_integer_distribution(total, raw_values):
+  total = max(0, int(total))
+  integer_values = {
+    name: max(0, int(raw_values.get(name, 0.0)))
+    for name in BASE_CONTINENTS
+  }
+  remainder = total - sum(integer_values.values())
+  if remainder <= 0:
+    return integer_values
+
+  ranked_names = sorted(
+    BASE_CONTINENTS,
+    key=lambda name: (raw_values.get(name, 0.0) - integer_values[name], name),
+    reverse=True,
+  )
+  for index in range(remainder):
+    integer_values[ranked_names[index % len(ranked_names)]] += 1
+  return integer_values
+
+
+def reanchor_continent_shares(state, current_state):
+  baseline_shares = normalize_named_distribution({
+    name: current_state["continents"][name]["population"]
+    for name in BASE_CONTINENTS
+  })
+  birth_shares = normalize_named_distribution({
+    name: state["continents"][name]["birth_share"]
+    for name in BASE_CONTINENTS
+  })
+  death_shares = normalize_named_distribution({
+    name: state["continents"][name]["death_share"]
+    for name in BASE_CONTINENTS
+  })
+  return {
+    name: {
+      "baseline_share": baseline_shares[name],
+      "birth_share": birth_shares[name],
+      "death_share": death_shares[name],
+    }
+    for name in BASE_CONTINENTS
+  }
+
+
 def build_initial_state(now=None, baseline_population=None, source="fallback"):
   now = now or utc_now()
   if baseline_population is None:
     baseline_population, source = get_population_cached()
   return {
-    "version": 2,
+    "version": STATE_SCHEMA_VERSION,
     "baseline_population": int(baseline_population),
     "baseline_timestamp": isoformat_z(now),
     "source": source,
     "last_sync_timestamp": isoformat_z(now),
-    "continents": {
-      name: {"baseline_population": data["population"]}
-      for name, data in BASE_CONTINENTS.items()
-    },
+    "refresh_pending": False,
+    "continents": build_share_model(),
   }
 
 
 def migrate_state(state):
   baseline_timestamp = state.get("last_updated") or isoformat_z(utc_now())
+  legacy_continents = state.get("continents", {})
+  share_model = build_share_model(
+    populations={
+      name: float(
+        legacy_continents.get(name, {}).get(
+          "population",
+          legacy_continents.get(name, {}).get("baseline_population", data["population"]),
+        )
+      )
+      for name, data in BASE_CONTINENTS.items()
+    },
+    birth_rates={
+      name: float(legacy_continents.get(name, {}).get("births_per_sec", data["births_per_sec"]))
+      for name, data in BASE_CONTINENTS.items()
+    },
+    death_rates={
+      name: float(legacy_continents.get(name, {}).get("deaths_per_sec", data["deaths_per_sec"]))
+      for name, data in BASE_CONTINENTS.items()
+    },
+  )
+  source = state.get("source", "migrated")
   migrated = {
-    "version": 2,
+    "version": STATE_SCHEMA_VERSION,
     "baseline_population": int(state.get("population", 8_123_456_789)),
     "baseline_timestamp": baseline_timestamp,
-    "source": state.get("source", "migrated"),
+    "source": source,
     "last_sync_timestamp": state.get("last_sync_timestamp", baseline_timestamp),
-    "continents": {},
+    "refresh_pending": bool(state.get("refresh_pending", source == "migrated")),
+    "continents": share_model,
   }
-  legacy_continents = state.get("continents", {})
-  for name, data in BASE_CONTINENTS.items():
-    continent_state = legacy_continents.get(name, {})
-    migrated["continents"][name] = {
-      "baseline_population": float(continent_state.get("population", data["population"]))
-    }
   return migrated
 
 
 def ensure_state_shape(state):
-  if state.get("version") != 2 or "baseline_population" not in state:
+  if state.get("version") != STATE_SCHEMA_VERSION or "baseline_population" not in state:
     state = migrate_state(state)
 
-  state.setdefault("source", "fallback")
-  state.setdefault("baseline_timestamp", isoformat_z(utc_now()))
-  state.setdefault("last_sync_timestamp", state["baseline_timestamp"])
-  state.setdefault("continents", {})
-
-  for name, data in BASE_CONTINENTS.items():
-    continent_state = state["continents"].setdefault(name, {})
-    continent_state.setdefault("baseline_population", data["population"])
-
-  return state
+  return {
+    "version": STATE_SCHEMA_VERSION,
+    "baseline_population": int(state.get("baseline_population", 8_123_456_789)),
+    "baseline_timestamp": state.get("baseline_timestamp", isoformat_z(utc_now())),
+    "source": state.get("source", "fallback"),
+    "last_sync_timestamp": state.get("last_sync_timestamp", state.get("baseline_timestamp", isoformat_z(utc_now()))),
+    "refresh_pending": bool(state.get("refresh_pending", state.get("source") == "migrated")),
+    "continents": canonicalize_share_state(state.get("continents", {})),
+  }
 
 
 def calculate_current_state(state, now=None):
@@ -170,26 +305,31 @@ def calculate_current_state(state, now=None):
   midnight = now.replace(hour=0, minute=0, second=0, microsecond=0)
   seconds_today = max(0.0, (now - midnight).total_seconds())
 
-  population = max(0.0, float(state["baseline_population"]) + (NET_PER_SEC * elapsed_seconds))
+  baseline_population = float(state["baseline_population"])
+  population = max(0.0, baseline_population + (NET_PER_SEC * elapsed_seconds))
+  births_today = BIRTHS_PER_SEC * seconds_today
+  deaths_today = DEATHS_PER_SEC * seconds_today
   current_state = {
     "population": population,
-    "births_today": BIRTHS_PER_SEC * seconds_today,
-    "deaths_today": DEATHS_PER_SEC * seconds_today,
+    "births_today": births_today,
+    "deaths_today": deaths_today,
     "last_updated": isoformat_z(now),
     "source": state.get("source", "fallback"),
     "baseline_timestamp": state["baseline_timestamp"],
     "last_sync_timestamp": state.get("last_sync_timestamp", state["baseline_timestamp"]),
+    "refresh_pending": bool(state.get("refresh_pending", False)),
     "continents": {},
   }
 
-  for name, data in BASE_CONTINENTS.items():
-    baseline_population = float(state["continents"][name]["baseline_population"])
-    births_per_sec = data["births_per_sec"]
-    deaths_per_sec = data["deaths_per_sec"]
+  for name in BASE_CONTINENTS:
+    continent_state = state["continents"][name]
+    births_per_sec = continent_state["birth_share"] * BIRTHS_PER_SEC
+    deaths_per_sec = continent_state["death_share"] * DEATHS_PER_SEC
+    baseline_continent_population = continent_state["baseline_share"] * baseline_population
     current_state["continents"][name] = {
-      "population": max(0.0, baseline_population + ((births_per_sec - deaths_per_sec) * elapsed_seconds)),
-      "births_today": births_per_sec * seconds_today,
-      "deaths_today": deaths_per_sec * seconds_today,
+      "population": max(0.0, baseline_continent_population + ((births_per_sec - deaths_per_sec) * elapsed_seconds)),
+      "births_today": continent_state["birth_share"] * births_today,
+      "deaths_today": continent_state["death_share"] * deaths_today,
       "births_per_sec": births_per_sec,
       "deaths_per_sec": deaths_per_sec,
     }
@@ -198,19 +338,44 @@ def calculate_current_state(state, now=None):
 
 
 def serialize_current_state(current_state):
+  total_population = int(current_state["population"])
+  total_births = int(current_state["births_today"])
+  total_deaths = int(current_state["deaths_today"])
+  population_distribution = reconcile_integer_distribution(
+    total_population,
+    {
+      name: data["population"]
+      for name, data in current_state["continents"].items()
+    },
+  )
+  births_distribution = reconcile_integer_distribution(
+    total_births,
+    {
+      name: data["births_today"]
+      for name, data in current_state["continents"].items()
+    },
+  )
+  deaths_distribution = reconcile_integer_distribution(
+    total_deaths,
+    {
+      name: data["deaths_today"]
+      for name, data in current_state["continents"].items()
+    },
+  )
+
   return {
-    "population": int(current_state["population"]),
-    "births_today": int(current_state["births_today"]),
-    "deaths_today": int(current_state["deaths_today"]),
+    "population": total_population,
+    "births_today": total_births,
+    "deaths_today": total_deaths,
     "last_updated": current_state["last_updated"],
     "source": current_state["source"],
     "baseline_timestamp": current_state["baseline_timestamp"],
     "last_sync_timestamp": current_state["last_sync_timestamp"],
     "continents": {
       name: {
-        "population": int(data["population"]),
-        "births_today": int(data["births_today"]),
-        "deaths_today": int(data["deaths_today"]),
+        "population": population_distribution[name],
+        "births_today": births_distribution[name],
+        "deaths_today": deaths_distribution[name],
         "births_per_sec": data["births_per_sec"],
         "deaths_per_sec": data["deaths_per_sec"],
       }
@@ -263,28 +428,27 @@ def get_current_state(now=None):
 
 
 def refresh_population_baseline(force=False, now=None):
-    now = now or utc_now()
-    with STATE_LOCK:
-        state = load_state()
-        last_sync = parse_timestamp(state.get("last_sync_timestamp", state["baseline_timestamp"]))
-        if not force and (now - last_sync).total_seconds() < SYNC_INTERVAL_SECONDS:
-            return False
+  now = now or utc_now()
+  with STATE_LOCK:
+    state = load_state()
+    last_sync = parse_timestamp(state.get("last_sync_timestamp", state["baseline_timestamp"]))
+    refresh_pending = bool(state.get("refresh_pending", False) or state.get("source") == "migrated")
+    if not force and not refresh_pending and (now - last_sync).total_seconds() < SYNC_INTERVAL_SECONDS:
+      return False
 
-        current_state = calculate_current_state(state, now=now)
-        population, source = get_population_cached()
-        if not population:
-            return False
+    current_state = calculate_current_state(state, now=now)
+    population, source = get_population_cached()
+    if not population:
+      return False
 
-        state["baseline_population"] = int(population)
-        state["baseline_timestamp"] = isoformat_z(now)
-        state["last_sync_timestamp"] = isoformat_z(now)
-        state["source"] = source
-        state["continents"] = {
-            name: {"baseline_population": data["population"]}
-            for name, data in current_state["continents"].items()
-        }
-        save_state(state)
-        return True
+    state["baseline_population"] = int(population)
+    state["baseline_timestamp"] = isoformat_z(now)
+    state["last_sync_timestamp"] = isoformat_z(now)
+    state["source"] = source
+    state["refresh_pending"] = False
+    state["continents"] = reanchor_continent_shares(state, current_state)
+    save_state(state)
+    return True
 
 
 def updater_loop():
@@ -298,6 +462,9 @@ def updater_loop():
 def start_updater():
     t = threading.Thread(target=updater_loop, daemon=True)
     t.start()
+
+
+UPDATER_ENABLED = os.getenv("RUN_UPDATER", "0") == "1"
 
 app = Flask(__name__)
 
@@ -1055,6 +1222,7 @@ def population():
 
 
 @app.route("/api/live-state")
+@limiter.limit(LIVE_STATE_LIMIT, override_defaults=True)
 def live_state():
     return jsonify(serialize_current_state(get_current_state()))
 
@@ -1201,10 +1369,10 @@ def sitemap_xml():
     return response
 
 if __name__ == "__main__":
-    if os.getenv("RUN_UPDATER", "0") == "1":
-        print("[INFO] Starting updater loop (RUN_UPDATER=1)")
-        start_updater()
+    if UPDATER_ENABLED:
+      print("[INFO] Starting updater loop (RUN_UPDATER=1)")
+      start_updater()
     else:
-        print("[INFO] Skipping updater loop (RUN_UPDATER not set to 1)")
+      print("[INFO] Skipping updater loop (RUN_UPDATER not set to 1)")
 
     app.run(host="0.0.0.0", port=PORT, debug=DEBUG)
