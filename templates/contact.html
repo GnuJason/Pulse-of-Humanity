@@ -32,15 +32,13 @@
 {% endblock %}
 
 {% block content %}
-  <div class="container mx-auto px-4 py-8 max-w-2xl">
-    <header class="text-center mb-8 reveal">
-      <h1 class="text-4xl font-bold mb-4" style="font-family: var(--font-display);">
-        <a href="/" class="text-[var(--accent)] hover:opacity-80 transition-opacity">
-          Pulse of Humanity
-        </a>
-      </h1>
-      <h2 class="text-2xl font-semibold text-gray-100">Contact Us</h2>
-      <p class="text-[var(--text-secondary)] mt-2">We'd love to hear from you. Send us a message!</p>
+  <div class="container mx-auto px-4 py-12 sm:py-16 max-w-2xl">
+    <header class="text-center mb-12 reveal">
+      <a href="/" class="heading-xl text-[var(--accent)] hover:opacity-80 transition-opacity inline-block mb-3">
+        Pulse of Humanity
+      </a>
+      <h1 class="heading-lg" style="color: var(--text-primary);">Contact Us</h1>
+      <p class="body-md mt-2" style="color: var(--text-secondary);">We'd love to hear from you. Send us a message!</p>
     </header>
 
     {# Flash Messages #}
@@ -61,16 +59,17 @@
       {% endif %}
     {% endwith %}
 
-    <div class="bg-[var(--bg-card)] rounded-lg p-8 shadow-2xl border border-[var(--border-color)] reveal reveal-delay-2">
+    <div class="rounded-xl p-6 sm:p-10 reveal reveal-delay-2"
+         style="background: var(--bg-card); border: 1px solid var(--border-color);">
       <form method="POST" class="space-y-6" novalidate>
         {{ form.hidden_tag() }}
 
         {# Name Field #}
         <div>
-          <label for="name" class="block text-sm font-medium text-gray-300 mb-2">
+          <label for="name" class="block text-sm font-medium mb-2" style="color: var(--text-secondary);">
             Name <span class="text-[var(--danger)]">*</span>
           </label>
-          {{ form.name(class="form-input w-full px-4 py-4 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-[var(--accent)] transition-colors text-base", placeholder="Your full name", id="name") }}
+          {{ form.name(class="form-input w-full px-4 py-4 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-[var(--accent)] transition-colors text-base", placeholder="Your full name", id="name", style="background: var(--bg-card-alt); border: 1px solid var(--border-color);") }}
           {% if form.name.errors %}
             <div class="mt-1 text-[var(--danger)] text-sm" role="alert">
               {% for error in form.name.errors %}
@@ -82,10 +81,10 @@
 
         {# Email Field #}
         <div>
-          <label for="email" class="block text-sm font-medium text-gray-300 mb-2">
+          <label for="email" class="block text-sm font-medium mb-2" style="color: var(--text-secondary);">
             Email <span class="text-[var(--danger)]">*</span>
           </label>
-          {{ form.email(class="form-input w-full px-4 py-4 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-[var(--accent)] transition-colors text-base", placeholder="your.email@example.com", id="email", type="email") }}
+          {{ form.email(class="form-input w-full px-4 py-4 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-[var(--accent)] transition-colors text-base", placeholder="your.email@example.com", id="email", type="email", style="background: var(--bg-card-alt); border: 1px solid var(--border-color);") }}
           {% if form.email.errors %}
             <div class="mt-1 text-[var(--danger)] text-sm" role="alert">
               {% for error in form.email.errors %}
@@ -97,10 +96,10 @@
 
         {# Message Field #}
         <div>
-          <label for="message" class="block text-sm font-medium text-gray-300 mb-2">
+          <label for="message" class="block text-sm font-medium mb-2" style="color: var(--text-secondary);">
             Message <span class="text-[var(--danger)]">*</span>
           </label>
-          {{ form.message(class="form-input w-full px-4 py-4 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-[var(--accent)] transition-colors resize-y text-base", placeholder="Tell us what's on your mind...", rows="6", id="message") }}
+          {{ form.message(class="form-input w-full px-4 py-4 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-[var(--accent)] transition-colors resize-y text-base", placeholder="Tell us what's on your mind...", rows="6", id="message", style="background: var(--bg-card-alt); border: 1px solid var(--border-color);") }}
           {% if form.message.errors %}
             <div class="mt-1 text-[var(--danger)] text-sm" role="alert">
               {% for error in form.message.errors %}
@@ -108,22 +107,22 @@
               {% endfor %}
             </div>
           {% endif %}
-          <div class="mt-1 text-[var(--text-muted)] text-sm" id="character-counter">
+          <div class="mt-1 text-sm" style="color: var(--text-muted);" id="character-counter">
             Minimum 10 characters, maximum 2000 characters
           </div>
         </div>
 
         {# Math Captcha #}
         <div>
-          <label for="captcha_answer" class="block text-sm font-medium text-gray-300 mb-2">
+          <label for="captcha_answer" class="block text-sm font-medium mb-2" style="color: var(--text-secondary);">
             Security Check <span class="text-[var(--danger)]">*</span>
           </label>
-          <div class="bg-gray-700 rounded-lg p-4 mb-3 border border-gray-600">
-            <div class="text-lg font-semibold text-[var(--accent)] mb-2">
-              Please solve: <span class="text-white">{{ captcha_question }} = ?</span>
+          <div class="rounded-lg p-4 mb-3" style="background: var(--bg-card-alt); border: 1px solid var(--border-color);">
+            <div class="heading-sm text-[var(--accent)] mb-2">
+              Please solve: <span style="color: var(--text-primary);">{{ captcha_question }} = ?</span>
             </div>
             <div class="captcha-container flex items-center">
-              {{ form.captcha_answer(class="form-input px-3 py-3 bg-gray-600 border border-gray-500 rounded text-white placeholder-gray-400 focus:outline-none focus:border-[var(--accent)] transition-colors text-base", placeholder="Answer", id="captcha_answer", type="number", style="width: 120px;") }}
+              {{ form.captcha_answer(class="form-input px-3 py-3 rounded text-white placeholder-gray-400 focus:outline-none focus:border-[var(--accent)] transition-colors text-base", placeholder="Answer", id="captcha_answer", type="number", style="width: 120px; background: var(--bg-secondary); border: 1px solid var(--border-color);") }}
             </div>
           </div>
           {% if form.captcha_answer.errors %}
