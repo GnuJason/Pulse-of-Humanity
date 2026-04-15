@@ -14,8 +14,7 @@
 
 ## Demo
 
-<!-- Replace with an actual screenshot or GIF once captured -->
-![Pulse of Humanity — main view](docs/screenshot-hero.png)
+![Pulse of Humanity — main view](assets/screenshots/pulse_of_humanity_display.png)
 
 *Live counter, continental breakdown, and interactive SVG world map with VANTA.js globe background.*
 
