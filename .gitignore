@@ -242,3 +242,6 @@ run_dev.py
 *.cpg
 *.README.html
 *.VERSION.txt
+
+# Tailwind CLI binary
+tailwindcss-linux-x64

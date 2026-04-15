@@ -223,6 +223,15 @@
         tooltip.style.transform = '';
       });
       cont.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          updateTooltip(e.currentTarget.id);
+          tooltip.style.left = '50%';
+          tooltip.style.top = 'auto';
+          tooltip.style.bottom = '120px';
+          tooltip.style.transform = 'translateX(-50%)';
+          tooltip.classList.toggle('hidden');
+        }
         if (e.key === 'Escape') {
           tooltip.classList.add('hidden');
           e.currentTarget.blur();

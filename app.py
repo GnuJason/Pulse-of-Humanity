@@ -96,8 +96,8 @@ def force_https():
 def add_security_headers(resp):
     csp = (
         "default-src 'self'; "
-        "script-src 'self' https://cdn.tailwindcss.com https://unpkg.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com 'unsafe-inline'; "
-        "style-src 'self' https://fonts.googleapis.com https://cdn.tailwindcss.com 'unsafe-inline'; "
+        "script-src 'self' https://unpkg.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com 'unsafe-inline'; "
+        "style-src 'self' https://fonts.googleapis.com 'unsafe-inline'; "
         "img-src 'self' data: https:; "
         "font-src 'self' https://fonts.gstatic.com; "
         "connect-src 'self'; "
