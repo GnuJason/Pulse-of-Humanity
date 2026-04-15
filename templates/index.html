@@ -13,7 +13,10 @@
       font-size: clamp(2.5rem, 10vw, 10rem);
       color: var(--accent);
       text-shadow: 0 0 20px var(--accent-glow);
-      animation: counterPulse 3s ease-in-out infinite;
+      animation: heroIn 0.7s cubic-bezier(0.16, 1, 0.3, 1) forwards,
+                 counterPulse 3s ease-in-out 0.7s infinite;
+      opacity: 0;
+      transform: translateY(8px);
       font-family: var(--font-display);
       font-weight: 800;
       letter-spacing: -0.04em;
@@ -85,6 +88,9 @@
         stroke-width: 2;
       }
     }
+    @media (prefers-reduced-motion: reduce) {
+      .counter { opacity: 1; transform: none; }
+    }
 {% endblock %}
 
 {% block head_extra %}
@@ -104,7 +110,7 @@
        style="color: var(--text-muted); font-family: var(--font-body);">
       Current World Population
     </p>
-    <div class="counter reveal reveal-delay-1" id="population-counter" aria-live="polite" role="status">Loading&hellip;</div>
+    <div class="counter" id="population-counter" aria-live="polite" role="status">Loading&hellip;</div>
     <div class="text-xs sm:text-sm mt-4 flex items-center justify-center gap-2 reveal reveal-delay-1" style="color: var(--text-muted);">
       <i data-feather="clock" class="w-3 h-3 sm:w-4 sm:h-4"></i>
       <span id="last-updated">Updating&hellip;</span>
