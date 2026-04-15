@@ -65,6 +65,10 @@ db.sqlite3-journal
 instance/
 .webassets-cache
 
+# Runtime state
+state.json
+state.json.tmp
+
 # Scrapy stuff:
 .scrapy
 

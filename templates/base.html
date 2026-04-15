@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{% block title %}Pulse of Humanity{% endblock %}</title>
+
+  <!-- Preconnect hints -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+
+  <!-- Fonts: Orbitron (display) + Outfit (body) -->
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+
+  <!-- Tailwind CSS (pinned) -->
+  <script src="https://cdn.tailwindcss.com/3.4.1"></script>
+
+  <style>
+    :root {
+      --accent: #00ffcc;
+      --accent-glow: rgba(0, 255, 204, 0.7);
+      --accent-strong: rgba(0, 255, 204, 1);
+      --bg-primary: #000000;
+      --bg-secondary: #111827;
+      --bg-card: #1f2937;
+      --bg-card-alt: #374151;
+      --border-color: #374151;
+      --text-primary: #ffffff;
+      --text-secondary: #9ca3af;
+      --text-muted: #6b7280;
+      --success: #4ade80;
+      --danger: #f87171;
+      --font-display: 'Orbitron', monospace, sans-serif;
+      --font-body: 'Outfit', sans-serif;
+    }
+
+    body {
+      font-family: var(--font-body);
+    }
+
+    /* Reduced-motion support */
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+      }
+    }
+
+    /* Page-load reveal choreography */
+    @keyframes fadeInUp {
+      from { opacity: 0; transform: translateY(18px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .reveal {
+      opacity: 0;
+      animation: fadeInUp 0.7s ease-out forwards;
+    }
+
+    .reveal-delay-1 { animation-delay: 0.12s; }
+    .reveal-delay-2 { animation-delay: 0.24s; }
+    .reveal-delay-3 { animation-delay: 0.40s; }
+    .reveal-delay-4 { animation-delay: 0.56s; }
+    .reveal-delay-5 { animation-delay: 0.72s; }
+
+    {% block extra_styles %}{% endblock %}
+  </style>
+  {% block head_extra %}{% endblock %}
+</head>
+<body class="{% block body_class %}bg-[var(--bg-secondary)] text-white min-h-screen{% endblock %}">
+
+  <!-- Skip to content -->
+  <a href="#main-content"
+     class="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-[100]
+            focus:bg-[var(--accent)] focus:text-black focus:px-4 focus:py-2 focus:rounded-md
+            focus:font-semibold focus:shadow-lg focus:outline-none">
+    Skip to content
+  </a>
+
+  {% block body %}
+  <main id="main-content">
+    {% block content %}{% endblock %}
+  </main>
+  {% endblock %}
+
+  <footer class="z-10 mt-auto py-3 sm:py-4 px-4 sm:px-6 {% block footer_class %}{% endblock %}">
+    <nav aria-label="Footer navigation" class="text-xs text-[var(--text-secondary)] text-center max-w-4xl mx-auto">
+      {% block footer_content %}
+      <p class="mb-1">
+        <a href="/about" class="underline hover:text-[var(--accent)] transition-colors">About</a> &bull;
+        <a href="/privacy" class="underline hover:text-[var(--accent)] transition-colors">Privacy</a> &bull;
+        <a href="/contact" class="underline hover:text-[var(--accent)] transition-colors">Contact Us</a>
+      </p>
+      <p class="mt-1">&copy; <span id="current-year"></span> Pulse of Humanity</p>
+      {% endblock %}
+    </nav>
+  </footer>
+
+  <script>
+    var yearEl = document.getElementById('current-year');
+    if (yearEl) yearEl.textContent = new Date().getFullYear();
+  </script>
+  {% block scripts %}{% endblock %}
+</body>
+</html>
