@@ -2,7 +2,7 @@
 
 {% block title %}Pulse of Humanity | Live World Population{% endblock %}
 
-{% block body_class %}min-h-screen flex flex-col items-center justify-center overflow-hidden relative{% endblock %}
+{% block body_class %}min-h-screen flex flex-col items-center overflow-x-hidden relative{% endblock %}
 
 {% block extra_styles %}
     @keyframes counterPulse {
@@ -94,7 +94,12 @@
 {% block body %}
   <div id="vanta-bg" class="absolute inset-0 z-0 opacity-20"></div>
 
-  <main id="main-content" class="z-10 text-center px-4 w-full max-w-6xl mx-auto">
+  <main id="main-content" class="z-10 text-center px-4 pt-16 sm:pt-24 w-full max-w-6xl mx-auto">
+    <h1 class="heading-xl text-[var(--accent)] mb-8 reveal-hero"
+        style="--hero-delay: 0ms;">
+      Pulse of Humanity
+    </h1>
+
     <p class="text-xs sm:text-sm tracking-[0.3em] uppercase reveal reveal-fade"
        style="color: var(--text-muted); font-family: var(--font-body);">
       Current World Population
