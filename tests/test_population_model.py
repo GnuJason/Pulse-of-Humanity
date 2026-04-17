@@ -205,6 +205,12 @@ class PopulationModelTests(unittest.TestCase):
         self.assertNotIn("births_today", live_payload)
         self.assertNotIn("deaths_today", live_payload)
 
+    def test_index_route_renders_successfully(self):
+        with humanity_app.app.test_client() as client:
+            response = client.get("/")
+
+        self.assertEqual(response.status_code, 200)
+
     def test_restart_behavior_preserves_deterministic_state(self):
         state = humanity_app.build_initial_state(now=self.fixed_time("2026-03-30T00:00:00Z"))
         self.write_state(state)

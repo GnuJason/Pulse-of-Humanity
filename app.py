@@ -27,6 +27,7 @@ from population import (
     refresh_population_baseline,
     serialize_continent_model,
     serialize_current_state,
+    serialize_live_state_contract,
     start_updater,
     utc_now,
 )
