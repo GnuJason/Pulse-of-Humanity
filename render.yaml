@@ -13,8 +13,6 @@ services:
         value: "1"
       - key: POP_ANCHOR_DAY
         value: "1"
-      - key: WPP_DATA_DIR
-        value: "/opt/render/project/src"
       - key: FLASK_SECRET_KEY
         generateValue: true
       - key: ADMIN_REANCHOR_TOKEN

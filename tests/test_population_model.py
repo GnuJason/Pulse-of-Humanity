@@ -5,27 +5,19 @@ from pathlib import Path
 from unittest.mock import patch
 
 import app as humanity_app
-import population_ingest
 
 
 class PopulationModelTests(unittest.TestCase):
     def setUp(self):
         self.temp_dir = tempfile.TemporaryDirectory()
         self.state_path = Path(self.temp_dir.name) / "state.json"
-        self.data_dir = Path(self.temp_dir.name) / "wpp"
-        self.data_dir.mkdir()
         self.state_patch = patch.object(humanity_app, "STATE_PATH", self.state_path)
-        self.data_dir_patch = patch.object(humanity_app._pop_module, "WPP_DATA_DIR", str(self.data_dir))
         self.state_patch.start()
-        self.data_dir_patch.start()
         humanity_app._CACHE.update({"anchor": None, "year": None, "ts": 0.0})
         humanity_app._pop_module.UPDATER_THREAD = None
-        self.write_wpp_csvs(year=2026)
-        self.write_wpp_csvs(year=2027, population=8_140_000_000, cbr=16.8, cdr=6.9)
 
     def tearDown(self):
         self.state_patch.stop()
-        self.data_dir_patch.stop()
         self.temp_dir.cleanup()
 
     def write_state(self, payload):
@@ -33,31 +25,6 @@ class PopulationModelTests(unittest.TestCase):
 
     def fixed_time(self, value):
         return humanity_app.parse_timestamp(value)
-
-    def write_wpp_csvs(self, year, population=8_100_000_000, cbr=17.0, cdr=7.0):
-        files = {
-            population_ingest.POPULATION_CSV: ("PopTotal", population),
-            population_ingest.BIRTH_RATE_CSV: ("CBR", cbr),
-            population_ingest.DEATH_RATE_CSV: ("CDR", cdr),
-        }
-        for filename, (field_name, value) in files.items():
-            path = self.data_dir / filename
-            if not path.exists():
-                path.write_text(
-                    "LocID,Variant,Time,{field}\n".format(field=field_name),
-                    encoding="utf-8",
-                )
-            with path.open("a", encoding="utf-8") as handle:
-                handle.write("900,Medium,{year},{value}\n".format(year=year, value=value))
-
-    def test_population_ingest_builds_anchor_from_csvs(self):
-        anchor = population_ingest.build_anchor(year=2026, data_dir=self.data_dir)
-
-        self.assertEqual(anchor["baseline_population"], 8_100_000_000)
-        self.assertEqual(anchor["baseline_timestamp"], "2026-01-01T00:00:00Z")
-        self.assertEqual(anchor["source"], "UN WPP 2024 Medium Variant")
-        self.assertEqual(anchor["last_anchor_year"], 2026)
-        self.assertGreater(anchor["births_per_second"], anchor["deaths_per_second"])
 
     def test_build_initial_state_creates_normalized_share_model(self):
         state = humanity_app.build_initial_state(
@@ -76,6 +43,16 @@ class PopulationModelTests(unittest.TestCase):
         self.assertAlmostEqual(sum(c["birth_share"] for c in state["continents"].values()), 1.0)
         self.assertAlmostEqual(sum(c["death_share"] for c in state["continents"].values()), 1.0)
         self.assertNotIn("baseline_population", state["continents"]["Africa"])
+
+    def test_build_initial_state_uses_static_anchor_by_default(self):
+        state = humanity_app.build_initial_state(now=self.fixed_time("2027-03-30T00:00:00Z"))
+
+        self.assertEqual(state["baseline_population"], 8_130_371_000)
+        self.assertEqual(state["baseline_timestamp"], "2026-01-01T00:00:00Z")
+        self.assertEqual(state["births_per_second"], 4.28)
+        self.assertEqual(state["deaths_per_second"], 2.06)
+        self.assertEqual(state["source"], "UN WPP 2024 Medium Variant (static)")
+        self.assertEqual(state["last_anchor_year"], 2026)
 
     def test_calculate_current_state_uses_elapsed_time_without_drift_and_reconciles_continents(self):
         baseline_time = humanity_app.parse_timestamp("2026-03-30T00:00:00Z")
@@ -96,9 +73,9 @@ class PopulationModelTests(unittest.TestCase):
         )
         serialized = humanity_app.serialize_current_state(after_twenty_seconds)
 
-        self.assertEqual(int(after_ten_seconds["population"]), 8_000_000_025)
-        self.assertEqual(int(after_twenty_seconds["population"]), 8_000_000_050)
-        self.assertEqual(int(after_twenty_seconds["population"] - after_ten_seconds["population"]), 25)
+        self.assertEqual(int(after_ten_seconds["population"]), 8_000_000_022)
+        self.assertEqual(int(after_twenty_seconds["population"]), 8_000_000_044)
+        self.assertEqual(int(after_twenty_seconds["population"] - after_ten_seconds["population"]), 22)
         self.assertEqual(sum(c["population"] for c in serialized["continents"].values()), serialized["population"])
         self.assertEqual(sum(c["births_today"] for c in serialized["continents"].values()), serialized["births_today"])
         self.assertEqual(sum(c["deaths_today"] for c in serialized["continents"].values()), serialized["deaths_today"])
@@ -146,9 +123,8 @@ class PopulationModelTests(unittest.TestCase):
         self.assertAlmostEqual(sum(c["baseline_share"] for c in state["continents"].values()), 1.0)
         self.assertAlmostEqual(sum(c["birth_share"] for c in state["continents"].values()), 1.0)
         self.assertAlmostEqual(sum(c["death_share"] for c in state["continents"].values()), 1.0)
-        self.assertNotIn("baseline_population", state["continents"]["Africa"])
 
-    def test_migrated_state_reanchors_with_authoritative_yearly_data(self):
+    def test_migrated_state_reanchors_to_static_anchor(self):
         self.write_state(
             {
                 "population": 8123457099.0,
@@ -159,8 +135,6 @@ class PopulationModelTests(unittest.TestCase):
                 },
             }
         )
-        migrated_state = humanity_app.load_state()
-        self.assertEqual(migrated_state["source"], "migrated")
 
         updated = humanity_app.refresh_population_baseline(
             force=False,
@@ -169,21 +143,15 @@ class PopulationModelTests(unittest.TestCase):
 
         self.assertTrue(updated)
         refreshed_state = humanity_app.load_state()
-        self.assertEqual(refreshed_state["baseline_population"], 8_100_000_000)
-        self.assertEqual(refreshed_state["source"], "UN WPP 2024 Medium Variant")
+        self.assertEqual(refreshed_state["baseline_population"], 8_130_371_000)
+        self.assertEqual(refreshed_state["source"], "UN WPP 2024 Medium Variant (static)")
+        self.assertEqual(refreshed_state["births_per_second"], 4.28)
+        self.assertEqual(refreshed_state["deaths_per_second"], 2.06)
         self.assertEqual(refreshed_state["last_anchor_year"], 2026)
+        self.assertEqual(refreshed_state["baseline_timestamp"], "2026-01-01T00:00:00Z")
 
-    def test_refresh_without_year_change_is_a_noop(self):
-        baseline_time = self.fixed_time("2026-03-30T00:00:00Z")
-        self.write_state(
-            humanity_app.build_initial_state(
-                now=baseline_time,
-                baseline_population=8_000_000_000,
-                source="initial",
-                anchor_year=2026,
-                baseline_timestamp="2026-03-30T00:00:00Z",
-            )
-        )
+    def test_refresh_without_state_change_is_a_noop(self):
+        self.write_state(humanity_app.build_initial_state(now=self.fixed_time("2026-03-30T00:00:00Z")))
 
         updated = humanity_app.refresh_population_baseline(
             force=False,
@@ -192,7 +160,7 @@ class PopulationModelTests(unittest.TestCase):
 
         self.assertFalse(updated)
 
-    def test_refresh_reanchors_when_crossing_into_new_anchor_year(self):
+    def test_force_refresh_rewrites_static_anchor(self):
         baseline_time = self.fixed_time("2026-01-01T00:00:00Z")
         self.write_state(
             humanity_app.build_initial_state(
@@ -204,51 +172,18 @@ class PopulationModelTests(unittest.TestCase):
         )
 
         updated = humanity_app.refresh_population_baseline(
-            force=False,
+            force=True,
             now=self.fixed_time("2027-01-01T00:00:05Z"),
         )
 
         self.assertTrue(updated)
         refreshed_state = humanity_app.load_state()
-        self.assertEqual(refreshed_state["baseline_population"], 8_140_000_000)
-        self.assertEqual(refreshed_state["source"], "UN WPP 2024 Medium Variant")
-        self.assertEqual(refreshed_state["last_anchor_year"], 2027)
-        self.assertEqual(refreshed_state["baseline_timestamp"], "2027-01-01T00:00:00Z")
+        self.assertEqual(refreshed_state["baseline_population"], 8_130_371_000)
+        self.assertEqual(refreshed_state["source"], "UN WPP 2024 Medium Variant (static)")
+        self.assertEqual(refreshed_state["last_anchor_year"], 2026)
+        self.assertEqual(refreshed_state["baseline_timestamp"], "2026-01-01T00:00:00Z")
 
-    def test_refresh_keeps_existing_state_when_ingest_fails(self):
-        baseline_time = self.fixed_time("2026-01-01T00:00:00Z")
-        self.write_state(
-            humanity_app.build_initial_state(
-                now=baseline_time,
-                baseline_population=8_000_000_000,
-                source="initial",
-                anchor_year=2026,
-            )
-        )
-
-        (self.data_dir / population_ingest.POPULATION_CSV).unlink()
-        updated = humanity_app.refresh_population_baseline(
-            force=False,
-            now=self.fixed_time("2027-01-01T00:00:05Z"),
-        )
-
-        self.assertFalse(updated)
-        preserved_state = humanity_app.load_state()
-        self.assertEqual(preserved_state["baseline_population"], 8_000_000_000)
-        self.assertEqual(preserved_state["last_anchor_year"], 2026)
-
-    def test_live_state_route_returns_authoritative_anchor_contract(self):
-        baseline_time = humanity_app.parse_timestamp("2026-03-30T00:00:00Z")
-        self.write_state(
-            humanity_app.build_initial_state(
-                now=baseline_time,
-                baseline_population=8_000_000_000,
-                source="test",
-                anchor_year=2026,
-                baseline_timestamp="2026-03-30T00:00:00Z",
-            )
-        )
-
+    def test_live_state_route_returns_static_anchor_contract(self):
         with humanity_app.app.test_client() as client:
             with patch.object(humanity_app._pop_module, "utc_now", return_value=humanity_app.parse_timestamp("2026-03-30T00:01:00Z")):
                 live_response = client.get("/api/live-state")
@@ -259,28 +194,20 @@ class PopulationModelTests(unittest.TestCase):
             set(live_payload.keys()),
             {"baselinePopulation", "baselineTimestamp", "birthsPerSecond", "deathsPerSecond", "serverTimestamp", "source", "lastAnchorYear"}
         )
-        self.assertEqual(live_payload["baselinePopulation"], 8_000_000_000)
-        self.assertEqual(live_payload["baselineTimestamp"], "2026-03-30T00:00:00Z")
-        self.assertEqual(live_payload["birthsPerSecond"], humanity_app.BIRTHS_PER_SEC)
-        self.assertEqual(live_payload["deathsPerSecond"], humanity_app.DEATHS_PER_SEC)
+        self.assertEqual(live_payload["baselinePopulation"], 8_130_371_000)
+        self.assertEqual(live_payload["baselineTimestamp"], "2026-01-01T00:00:00Z")
+        self.assertEqual(live_payload["birthsPerSecond"], 4.28)
+        self.assertEqual(live_payload["deathsPerSecond"], 2.06)
         self.assertEqual(live_payload["serverTimestamp"], "2026-03-30T00:01:00Z")
-        self.assertEqual(live_payload["source"], "test")
+        self.assertEqual(live_payload["source"], "UN WPP 2024 Medium Variant (static)")
         self.assertEqual(live_payload["lastAnchorYear"], 2026)
         self.assertNotIn("population", live_payload)
         self.assertNotIn("births_today", live_payload)
         self.assertNotIn("deaths_today", live_payload)
 
     def test_restart_behavior_preserves_deterministic_state(self):
-        baseline_time = self.fixed_time("2026-03-30T00:00:00Z")
-        self.write_state(
-            humanity_app.build_initial_state(
-                now=baseline_time,
-                baseline_population=8_000_000_000,
-                source="initial",
-                anchor_year=2026,
-                baseline_timestamp="2026-03-30T00:00:00Z",
-            )
-        )
+        state = humanity_app.build_initial_state(now=self.fixed_time("2026-03-30T00:00:00Z"))
+        self.write_state(state)
 
         check_time = self.fixed_time("2026-03-30T00:10:00Z")
         before_restart = humanity_app.serialize_current_state(
@@ -309,9 +236,11 @@ class PopulationModelTests(unittest.TestCase):
 
         self.assertTrue(updated)
         stored_state = humanity_app.load_state()
-        self.assertEqual(stored_state["baseline_population"], 8_100_000_000)
+        self.assertEqual(stored_state["baseline_population"], 8_130_371_000)
         self.assertEqual(stored_state["baseline_timestamp"], "2026-01-01T00:00:00Z")
-        self.assertEqual(stored_state["source"], "UN WPP 2024 Medium Variant")
+        self.assertEqual(stored_state["births_per_second"], 4.28)
+        self.assertEqual(stored_state["deaths_per_second"], 2.06)
+        self.assertEqual(stored_state["source"], "UN WPP 2024 Medium Variant (static)")
         self.assertEqual(stored_state["last_anchor_year"], 2026)
 
     def test_bootstrap_population_system_starts_updater_when_enabled(self):
@@ -329,17 +258,6 @@ class PopulationModelTests(unittest.TestCase):
         start_mock.assert_not_called()
 
     def test_live_state_route_allows_sustained_polling_before_burst_limit(self):
-        baseline_time = self.fixed_time("2026-03-30T00:00:00Z")
-        self.write_state(
-            humanity_app.build_initial_state(
-                now=baseline_time,
-                baseline_population=8_000_000_000,
-                source="test",
-                anchor_year=2026,
-                baseline_timestamp="2026-03-30T00:00:00Z",
-            )
-        )
-
         with humanity_app.app.test_client() as client:
             responses = []
             for _ in range(120):
@@ -361,7 +279,7 @@ class PopulationModelTests(unittest.TestCase):
         self.assertEqual(forbidden.status_code, 403)
         self.assertNotEqual(allowed.status_code, 403)
         self.assertIn("anchor", allowed.get_json())
-        self.assertEqual(allowed.get_json()["anchor"]["baselinePopulation"], 8_100_000_000)
+        self.assertEqual(allowed.get_json()["anchor"]["baselinePopulation"], 8_130_371_000)
 
 
 if __name__ == "__main__":

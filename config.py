@@ -30,7 +30,6 @@ class Config:
     RUN_UPDATER = os.environ.get('RUN_UPDATER', '0').lower() in ('1', 'true', 'yes')
     POP_ANCHOR_MONTH = int(os.environ.get('POP_ANCHOR_MONTH', '1'))
     POP_ANCHOR_DAY = int(os.environ.get('POP_ANCHOR_DAY', '1'))
-    WPP_DATA_DIR = os.environ.get('WPP_DATA_DIR')
     ADMIN_REANCHOR_TOKEN = os.environ.get('ADMIN_REANCHOR_TOKEN')
     
     @classmethod
@@ -68,7 +67,6 @@ class Config:
             'run_updater': cls.RUN_UPDATER,
             'anchor_month': cls.POP_ANCHOR_MONTH,
             'anchor_day': cls.POP_ANCHOR_DAY,
-            'wpp_data_dir': cls.WPP_DATA_DIR or '<repo root>',
             'has_secret_key': bool(cls.SECRET_KEY),
             'has_smtp_username': bool(cls.SMTP_USERNAME),
             'has_smtp_password': bool(cls.SMTP_PASSWORD),

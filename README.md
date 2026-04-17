@@ -4,7 +4,7 @@
 
 # Pulse of Humanity
 
-> Real-time world population visualization anchored to local UN WPP CSVs with deterministic browser-side simulation.
+> Real-time world population visualization anchored to fixed UN WPP-based annual rates with deterministic browser-side simulation.
 
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 [![Python 3.11+](https://img.shields.io/badge/Python-3.11+-3776AB.svg?logo=python&logoColor=white)](https://www.python.org/)
@@ -100,7 +100,6 @@ node --test tests/population_ticker.test.cjs
 | `RUN_UPDATER` | No | `1` | Enable background annual anchor checks |
 | `POP_ANCHOR_MONTH` | No | `1` | Month for yearly authoritative re-anchor |
 | `POP_ANCHOR_DAY` | No | `1` | Day for yearly authoritative re-anchor |
-| `WPP_DATA_DIR` | No | repo root | Directory containing the three UN WPP 2024 CSV files |
 | `ADMIN_REANCHOR_TOKEN` | No | — | Token required for `POST /admin/reanchor` |
 | `SMTP_SERVER` | No | `smtp.mailfence.com` | SMTP server for contact form |
 | `SMTP_PORT` | No | `587` | SMTP port |
@@ -114,8 +113,7 @@ node --test tests/population_ticker.test.cjs
 1. Fork this repository
 2. Create a new **Web Service** on [Render](https://render.com) connected to your fork
 3. Render auto-detects the included `render.yaml`
-4. Place the three UN WPP 2024 CSV files in the app directory or point `WPP_DATA_DIR` at their location
-5. Set `FLASK_SECRET_KEY` and optional SMTP variables in the Render dashboard
+4. Set `FLASK_SECRET_KEY` and optional SMTP variables in the Render dashboard
 
 ## Contributing
 
@@ -131,9 +129,8 @@ This project is licensed under the **GNU General Public License v3.0** — see [
 
 ## Acknowledgments
 
-- [United Nations World Population Prospects 2024 Revision](https://population.un.org/wpp/) — primary annual demographic source. Pulse of Humanity ingests the Total Population by Sex, Crude Birth Rate, and Crude Death Rate CSV datasets for the Medium Variant, LocID `900` (World).
-- [World Bank Open Data](https://data.worldbank.org/indicator/SP.POP.TOTL) — annual fallback source for population totals if UN WPP CSV ingestion fails.
-- The live ticker is computed locally from a deterministic annual anchor using demographic rates derived from the UN WPP data; normal operation does not require external API calls.
+- [United Nations World Population Prospects 2024 Revision](https://population.un.org/wpp/) — source basis for the fixed annual anchor values used by the application.
+- The live ticker is computed locally from a deterministic annual anchor using fixed UN WPP-based demographic rates; normal operation does not require external API calls or live population feeds.
 - Deprecated sources no longer used: API Ninjas, Worldometer scraping, hourly refresh APIs, and snapshot-based population feeds.
 - [VANTA.js](https://www.vantajs.com/) — animated 3D backgrounds
 - [Tailwind CSS](https://tailwindcss.com/) — utility-first CSS

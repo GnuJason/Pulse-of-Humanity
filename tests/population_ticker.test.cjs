@@ -59,7 +59,7 @@ test('computeContinentState is deterministic across clients given the same ancho
     birthsPerSecond: 4.3,
     deathsPerSecond: 1.8,
     serverTimestamp: '2026-03-30T01:00:02Z',
-    source: 'un_wpp',
+    source: 'UN WPP 2024 Medium Variant (static)',
   };
   const clientOne = ticker.normalizeAnchor(rawAnchor, 25);
   const clientTwo = ticker.normalizeAnchor(rawAnchor, 25);

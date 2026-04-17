@@ -8,9 +8,6 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 
-from population_ingest import YEAR as DEFAULT_WPP_YEAR
-from population_ingest import build_anchor as ingest_population_anchor
-
 
 STATE_PATH = Path("state.json")
 STATE_LOCK = threading.Lock()
@@ -35,13 +32,19 @@ STATE_SCHEMA_VERSION = 5
 ANCHOR_MONTH = int(os.getenv("POP_ANCHOR_MONTH", "1"))
 ANCHOR_DAY = int(os.getenv("POP_ANCHOR_DAY", "1"))
 
-WPP_DEFAULT_YEAR = int(os.getenv("WPP_DEFAULT_YEAR", str(DEFAULT_WPP_YEAR)))
-WPP_DATA_DIR = os.getenv("WPP_DATA_DIR")
-
-FALLBACK_BASELINE_POPULATION = 8_123_456_789
-BIRTHS_PER_SEC = 4.3
-DEATHS_PER_SEC = 1.8
+BIRTHS_PER_SEC = 4.28
+DEATHS_PER_SEC = 2.06
 NET_PER_SEC = BIRTHS_PER_SEC - DEATHS_PER_SEC
+
+STATIC_ANCHOR = {
+    "baseline_population": 8130371000,
+    "baseline_timestamp": "2026-01-01T00:00:00Z",
+    "births_per_second": BIRTHS_PER_SEC,
+    "deaths_per_second": DEATHS_PER_SEC,
+    "source": "UN WPP 2024 Medium Variant (static)",
+    "last_anchor_year": 2026,
+}
+
 
 def utc_now():
     return datetime.now(timezone.utc)
@@ -194,49 +197,25 @@ def reanchor_continent_shares(state, current_state):
     }
 
 
-def get_ingested_anchor(target_year):
-    try:
-        anchor = ingest_population_anchor(year=int(target_year), data_dir=WPP_DATA_DIR)
-        return {
-            "population": int(float(anchor["baseline_population"])),
-            "births_per_second": float(anchor["births_per_second"]),
-            "deaths_per_second": float(anchor["deaths_per_second"]),
-            "source": anchor["source"],
-            "anchor_year": int(anchor["last_anchor_year"]),
-            "data_year": int(anchor["last_anchor_year"]),
-        }
-    except Exception as exc:
-        print(f"[ERROR] Failed to ingest WPP anchor for {target_year}: {exc}")
-        return None
-
-
-def get_fallback_anchor(target_year):
+def get_static_anchor():
     return {
-        "population": FALLBACK_BASELINE_POPULATION,
-        "births_per_second": BIRTHS_PER_SEC,
-        "deaths_per_second": DEATHS_PER_SEC,
-        "source": "fallback",
-        "anchor_year": int(target_year),
-        "data_year": int(target_year),
+        "population": int(STATIC_ANCHOR["baseline_population"]),
+        "births_per_second": float(STATIC_ANCHOR["births_per_second"]),
+        "deaths_per_second": float(STATIC_ANCHOR["deaths_per_second"]),
+        "source": STATIC_ANCHOR["source"],
+        "anchor_year": int(STATIC_ANCHOR["last_anchor_year"]),
+        "data_year": int(STATIC_ANCHOR["last_anchor_year"]),
     }
 
 
 def get_authoritative_population_anchor(target_year=None, allow_fallback=True):
-    target_year = int(target_year if target_year is not None else max(get_effective_anchor_year(), WPP_DEFAULT_YEAR))
+    target_year = int(STATIC_ANCHOR["last_anchor_year"])
     now = time.time()
     cached_anchor = _CACHE.get("anchor")
     if cached_anchor and _CACHE.get("year") == target_year and (now - _CACHE.get("ts", 0.0) < CACHE_TTL):
         return dict(cached_anchor)
 
-    anchor = get_ingested_anchor(target_year)
-    if anchor:
-        _CACHE.update({"anchor": dict(anchor), "year": target_year, "ts": now})
-        return anchor
-
-    if not allow_fallback:
-        return None
-
-    anchor = get_fallback_anchor(target_year)
+    anchor = get_static_anchor()
     _CACHE.update({"anchor": dict(anchor), "year": target_year, "ts": now})
     return anchor
 
@@ -256,7 +235,7 @@ def build_initial_state(
     baseline_timestamp=None,
 ):
     now = now or utc_now()
-    anchor_year = int(anchor_year if anchor_year is not None else get_effective_anchor_year(now))
+    anchor_year = int(anchor_year if anchor_year is not None else STATIC_ANCHOR["last_anchor_year"])
 
     if baseline_population is None:
         anchor = get_authoritative_population_anchor(target_year=anchor_year, allow_fallback=True)
@@ -264,6 +243,8 @@ def build_initial_state(
         births_per_second = anchor["births_per_second"]
         deaths_per_second = anchor["deaths_per_second"]
         source = anchor["source"]
+        anchor_year = anchor["anchor_year"]
+        baseline_timestamp = STATIC_ANCHOR["baseline_timestamp"]
 
     if births_per_second is None:
         births_per_second = BIRTHS_PER_SEC
@@ -308,12 +289,12 @@ def migrate_state(state):
     source = state.get("source", "migrated")
     return {
         "version": STATE_SCHEMA_VERSION,
-        "baseline_population": int(state.get("baseline_population", state.get("population", FALLBACK_BASELINE_POPULATION))),
+        "baseline_population": int(state.get("baseline_population", state.get("population", STATIC_ANCHOR["baseline_population"]))),
         "baseline_timestamp": isoformat_z(baseline_dt),
         "births_per_second": float(state.get("births_per_second", BIRTHS_PER_SEC)),
         "deaths_per_second": float(state.get("deaths_per_second", DEATHS_PER_SEC)),
         "source": source,
-        "last_anchor_year": int(state.get("last_anchor_year", get_effective_anchor_year(baseline_dt))),
+        "last_anchor_year": int(state.get("last_anchor_year", STATIC_ANCHOR["last_anchor_year"])),
         "continents": share_model,
     }
 
@@ -322,16 +303,16 @@ def ensure_state_shape(state):
     if state.get("version") != STATE_SCHEMA_VERSION or "baseline_population" not in state:
         state = migrate_state(state)
 
-    baseline_timestamp = state.get("baseline_timestamp", isoformat_z(utc_now()))
+    baseline_timestamp = state.get("baseline_timestamp", STATIC_ANCHOR["baseline_timestamp"])
     baseline_dt = parse_timestamp(baseline_timestamp)
     return {
         "version": STATE_SCHEMA_VERSION,
-        "baseline_population": int(state.get("baseline_population", FALLBACK_BASELINE_POPULATION)),
+        "baseline_population": int(state.get("baseline_population", STATIC_ANCHOR["baseline_population"])),
         "baseline_timestamp": isoformat_z(baseline_dt),
         "births_per_second": float(state.get("births_per_second", BIRTHS_PER_SEC)),
         "deaths_per_second": float(state.get("deaths_per_second", DEATHS_PER_SEC)),
-        "source": state.get("source", "fallback"),
-        "last_anchor_year": int(state.get("last_anchor_year", get_effective_anchor_year(baseline_dt))),
+        "source": state.get("source", STATIC_ANCHOR["source"]),
+        "last_anchor_year": int(state.get("last_anchor_year", STATIC_ANCHOR["last_anchor_year"])),
         "continents": canonicalize_share_state(state.get("continents", {})),
     }
 
@@ -354,11 +335,11 @@ def calculate_current_state(state, now=None):
         "births_today": births_today,
         "deaths_today": deaths_today,
         "last_updated": isoformat_z(now),
-        "source": state.get("source", "fallback"),
+        "source": state.get("source", STATIC_ANCHOR["source"]),
         "baseline_timestamp": state["baseline_timestamp"],
         "births_per_second": births_per_second,
         "deaths_per_second": deaths_per_second,
-        "last_anchor_year": int(state.get("last_anchor_year", get_effective_anchor_year(baseline_timestamp))),
+        "last_anchor_year": int(state.get("last_anchor_year", STATIC_ANCHOR["last_anchor_year"])),
         "continents": {},
     }
 
@@ -426,8 +407,8 @@ def serialize_live_state_contract(state, now=None):
         "birthsPerSecond": float(state.get("births_per_second", BIRTHS_PER_SEC)),
         "deathsPerSecond": float(state.get("deaths_per_second", DEATHS_PER_SEC)),
         "serverTimestamp": isoformat_z(now),
-        "source": state.get("source", "fallback"),
-        "lastAnchorYear": int(state.get("last_anchor_year", get_effective_anchor_year(now))),
+        "source": state.get("source", STATIC_ANCHOR["source"]),
+        "lastAnchorYear": int(state.get("last_anchor_year", STATIC_ANCHOR["last_anchor_year"])),
     }
 
 
@@ -475,25 +456,31 @@ def save_state(state):
             print(f"[ERROR] Failed direct state save: {fallback_exc}")
 
 
+def state_uses_static_anchor(state):
+    return (
+        int(state.get("baseline_population", 0)) == int(STATIC_ANCHOR["baseline_population"])
+        and state.get("baseline_timestamp") == STATIC_ANCHOR["baseline_timestamp"]
+        and float(state.get("births_per_second", 0.0)) == float(STATIC_ANCHOR["births_per_second"])
+        and float(state.get("deaths_per_second", 0.0)) == float(STATIC_ANCHOR["deaths_per_second"])
+        and state.get("source") == STATIC_ANCHOR["source"]
+        and int(state.get("last_anchor_year", 0)) == int(STATIC_ANCHOR["last_anchor_year"])
+    )
+
+
 def refresh_population_baseline(force=False, now=None, target_year=None):
     now = now or utc_now()
-    desired_anchor_year = int(target_year if target_year is not None else get_effective_anchor_year(now))
+    desired_anchor_year = int(STATIC_ANCHOR["last_anchor_year"])
 
     with STATE_LOCK:
         state = load_state()
-        current_anchor_year = int(state.get("last_anchor_year", get_effective_anchor_year(parse_timestamp(state["baseline_timestamp"]))))
-        source = state.get("source", "fallback")
-        needs_refresh = force or source == "migrated" or current_anchor_year != desired_anchor_year
+        needs_refresh = force or state.get("source") == "migrated" or not state_uses_static_anchor(state)
         if not needs_refresh:
             return False
 
-        anchor = get_authoritative_population_anchor(target_year=desired_anchor_year, allow_fallback=False)
-        if not anchor:
-            return False
-
+        anchor = get_authoritative_population_anchor(target_year=desired_anchor_year, allow_fallback=True)
         current_state = calculate_current_state(state, now=now)
         state["baseline_population"] = int(anchor["population"])
-        state["baseline_timestamp"] = isoformat_z(get_anchor_date(desired_anchor_year))
+        state["baseline_timestamp"] = STATIC_ANCHOR["baseline_timestamp"]
         state["births_per_second"] = float(anchor["births_per_second"])
         state["deaths_per_second"] = float(anchor["deaths_per_second"])
         state["source"] = anchor["source"]
