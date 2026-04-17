@@ -131,7 +131,10 @@ This project is licensed under the **GNU General Public License v3.0** — see [
 
 ## Acknowledgments
 
-- [UN World Population Prospects](https://population.un.org/wpp/) — annual demographic source CSVs for the authoritative anchor
+- [United Nations World Population Prospects 2024 Revision](https://population.un.org/wpp/) — primary annual demographic source. Pulse of Humanity ingests the Total Population by Sex, Crude Birth Rate, and Crude Death Rate CSV datasets for the Medium Variant, LocID `900` (World).
+- [World Bank Open Data](https://data.worldbank.org/indicator/SP.POP.TOTL) — annual fallback source for population totals if UN WPP CSV ingestion fails.
+- The live ticker is computed locally from a deterministic annual anchor using demographic rates derived from the UN WPP data; normal operation does not require external API calls.
+- Deprecated sources no longer used: API Ninjas, Worldometer scraping, hourly refresh APIs, and snapshot-based population feeds.
 - [VANTA.js](https://www.vantajs.com/) — animated 3D backgrounds
 - [Tailwind CSS](https://tailwindcss.com/) — utility-first CSS
 - [Natural Earth](https://www.naturalearthdata.com/) — geographic data
