@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/branding/pulseofhumanity_gif.jpg" style="max-width: 100%; height: auto;" />
+</p>
+
 # Pulse of Humanity
 
 > Real-time world population visualization with an interactive SVG map, animated 3D globe, and cinematic design.
@@ -7,6 +11,7 @@
 [![Flask 3.x](https://img.shields.io/badge/Flask-3.x-000000.svg?logo=flask)](https://flask.palletsprojects.com/)
 [![Deploy on Render](https://img.shields.io/badge/Deploy-Render-46E3B7.svg?logo=render)](https://render.com)
 [![Tests](https://img.shields.io/badge/Tests-10%20passing-brightgreen.svg)]()
+
 
 <!-- TOPIC TAGS: flask, population, data-visualization, real-time, tailwindcss, python, demographics, open-data -->
 
