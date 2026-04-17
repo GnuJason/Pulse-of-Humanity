@@ -17,6 +17,7 @@ def check_environment():
         'RUN_UPDATER': 'Enable background annual anchor checks (1 for yes)',
         'POP_ANCHOR_MONTH': 'Anchor month for authoritative yearly baseline (default: 1)',
         'POP_ANCHOR_DAY': 'Anchor day for authoritative yearly baseline (default: 1)',
+        'WPP_DATA_DIR': 'Directory containing the three UN WPP CSV files',
         'ADMIN_REANCHOR_TOKEN': 'Optional admin token for POST /admin/reanchor',
     }
     

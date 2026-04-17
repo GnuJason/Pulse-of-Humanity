@@ -5,19 +5,27 @@ from pathlib import Path
 from unittest.mock import patch
 
 import app as humanity_app
+import population_ingest
 
 
 class PopulationModelTests(unittest.TestCase):
     def setUp(self):
         self.temp_dir = tempfile.TemporaryDirectory()
         self.state_path = Path(self.temp_dir.name) / "state.json"
+        self.data_dir = Path(self.temp_dir.name) / "wpp"
+        self.data_dir.mkdir()
         self.state_patch = patch.object(humanity_app, "STATE_PATH", self.state_path)
+        self.data_dir_patch = patch.object(humanity_app._pop_module, "WPP_DATA_DIR", str(self.data_dir))
         self.state_patch.start()
+        self.data_dir_patch.start()
         humanity_app._CACHE.update({"anchor": None, "year": None, "ts": 0.0})
         humanity_app._pop_module.UPDATER_THREAD = None
+        self.write_wpp_csvs(year=2026)
+        self.write_wpp_csvs(year=2027, population=8_140_000_000, cbr=16.8, cdr=6.9)
 
     def tearDown(self):
         self.state_patch.stop()
+        self.data_dir_patch.stop()
         self.temp_dir.cleanup()
 
     def write_state(self, payload):
@@ -25,6 +33,31 @@ class PopulationModelTests(unittest.TestCase):
 
     def fixed_time(self, value):
         return humanity_app.parse_timestamp(value)
+
+    def write_wpp_csvs(self, year, population=8_100_000_000, cbr=17.0, cdr=7.0):
+        files = {
+            population_ingest.POPULATION_CSV: ("PopTotal", population),
+            population_ingest.BIRTH_RATE_CSV: ("CBR", cbr),
+            population_ingest.DEATH_RATE_CSV: ("CDR", cdr),
+        }
+        for filename, (field_name, value) in files.items():
+            path = self.data_dir / filename
+            if not path.exists():
+                path.write_text(
+                    "LocID,Variant,Time,{field}\n".format(field=field_name),
+                    encoding="utf-8",
+                )
+            with path.open("a", encoding="utf-8") as handle:
+                handle.write("900,Medium,{year},{value}\n".format(year=year, value=value))
+
+    def test_population_ingest_builds_anchor_from_csvs(self):
+        anchor = population_ingest.build_anchor(year=2026, data_dir=self.data_dir)
+
+        self.assertEqual(anchor["baseline_population"], 8_100_000_000)
+        self.assertEqual(anchor["baseline_timestamp"], "2026-01-01T00:00:00Z")
+        self.assertEqual(anchor["source"], "UN WPP 2024 Medium Variant")
+        self.assertEqual(anchor["last_anchor_year"], 2026)
+        self.assertGreater(anchor["births_per_second"], anchor["deaths_per_second"])
 
     def test_build_initial_state_creates_normalized_share_model(self):
         state = humanity_app.build_initial_state(
@@ -129,26 +162,15 @@ class PopulationModelTests(unittest.TestCase):
         migrated_state = humanity_app.load_state()
         self.assertEqual(migrated_state["source"], "migrated")
 
-        anchor_bundle = {
-            "population": 8_100_000_000,
-            "births_per_second": 4.4,
-            "deaths_per_second": 1.9,
-            "source": "un_wpp",
-            "anchor_year": 2026,
-            "data_year": 2026,
-        }
-        with patch.object(humanity_app._pop_module, "get_authoritative_population_anchor", return_value=anchor_bundle):
-            updated = humanity_app.refresh_population_baseline(
-                force=False,
-                now=self.fixed_time("2026-03-30T00:05:00Z"),
-            )
+        updated = humanity_app.refresh_population_baseline(
+            force=False,
+            now=self.fixed_time("2026-03-30T00:05:00Z"),
+        )
 
         self.assertTrue(updated)
         refreshed_state = humanity_app.load_state()
         self.assertEqual(refreshed_state["baseline_population"], 8_100_000_000)
-        self.assertEqual(refreshed_state["source"], "un_wpp")
-        self.assertEqual(refreshed_state["births_per_second"], 4.4)
-        self.assertEqual(refreshed_state["deaths_per_second"], 1.9)
+        self.assertEqual(refreshed_state["source"], "UN WPP 2024 Medium Variant")
         self.assertEqual(refreshed_state["last_anchor_year"], 2026)
 
     def test_refresh_without_year_change_is_a_noop(self):
@@ -163,19 +185,10 @@ class PopulationModelTests(unittest.TestCase):
             )
         )
 
-        anchor_bundle = {
-            "population": 8_100_000_000,
-            "births_per_second": 4.4,
-            "deaths_per_second": 1.9,
-            "source": "un_wpp",
-            "anchor_year": 2026,
-            "data_year": 2026,
-        }
-        with patch.object(humanity_app._pop_module, "get_authoritative_population_anchor", return_value=anchor_bundle):
-            updated = humanity_app.refresh_population_baseline(
-                force=False,
-                now=self.fixed_time("2026-03-30T00:05:00Z"),
-            )
+        updated = humanity_app.refresh_population_baseline(
+            force=False,
+            now=self.fixed_time("2026-03-30T00:05:00Z"),
+        )
 
         self.assertFalse(updated)
 
@@ -190,28 +203,19 @@ class PopulationModelTests(unittest.TestCase):
             )
         )
 
-        anchor_bundle = {
-            "population": 8_140_000_000,
-            "births_per_second": 4.1,
-            "deaths_per_second": 1.7,
-            "source": "world_bank",
-            "anchor_year": 2027,
-            "data_year": 2026,
-        }
-        with patch.object(humanity_app._pop_module, "get_authoritative_population_anchor", return_value=anchor_bundle):
-            updated = humanity_app.refresh_population_baseline(
-                force=False,
-                now=self.fixed_time("2027-01-01T00:00:05Z"),
-            )
+        updated = humanity_app.refresh_population_baseline(
+            force=False,
+            now=self.fixed_time("2027-01-01T00:00:05Z"),
+        )
 
         self.assertTrue(updated)
         refreshed_state = humanity_app.load_state()
         self.assertEqual(refreshed_state["baseline_population"], 8_140_000_000)
-        self.assertEqual(refreshed_state["source"], "world_bank")
+        self.assertEqual(refreshed_state["source"], "UN WPP 2024 Medium Variant")
         self.assertEqual(refreshed_state["last_anchor_year"], 2027)
         self.assertEqual(refreshed_state["baseline_timestamp"], "2027-01-01T00:00:00Z")
 
-    def test_refresh_keeps_existing_state_when_authorities_fail(self):
+    def test_refresh_keeps_existing_state_when_ingest_fails(self):
         baseline_time = self.fixed_time("2026-01-01T00:00:00Z")
         self.write_state(
             humanity_app.build_initial_state(
@@ -222,11 +226,11 @@ class PopulationModelTests(unittest.TestCase):
             )
         )
 
-        with patch.object(humanity_app._pop_module, "get_authoritative_population_anchor", return_value=None):
-            updated = humanity_app.refresh_population_baseline(
-                force=False,
-                now=self.fixed_time("2027-01-01T00:00:05Z"),
-            )
+        (self.data_dir / population_ingest.POPULATION_CSV).unlink()
+        updated = humanity_app.refresh_population_baseline(
+            force=False,
+            now=self.fixed_time("2027-01-01T00:00:05Z"),
+        )
 
         self.assertFalse(updated)
         preserved_state = humanity_app.load_state()
@@ -301,24 +305,13 @@ class PopulationModelTests(unittest.TestCase):
         )
 
         refresh_time = humanity_app.parse_timestamp("2026-03-30T01:00:00Z")
-        anchor_bundle = {
-            "population": 8_100_000_000,
-            "births_per_second": 4.4,
-            "deaths_per_second": 1.9,
-            "source": "un_wpp",
-            "anchor_year": 2026,
-            "data_year": 2026,
-        }
-        with patch.object(humanity_app._pop_module, "get_authoritative_population_anchor", return_value=anchor_bundle):
-            updated = humanity_app.refresh_population_baseline(force=True, now=refresh_time, target_year=2026)
+        updated = humanity_app.refresh_population_baseline(force=True, now=refresh_time, target_year=2026)
 
         self.assertTrue(updated)
         stored_state = humanity_app.load_state()
         self.assertEqual(stored_state["baseline_population"], 8_100_000_000)
         self.assertEqual(stored_state["baseline_timestamp"], "2026-01-01T00:00:00Z")
-        self.assertEqual(stored_state["births_per_second"], 4.4)
-        self.assertEqual(stored_state["deaths_per_second"], 1.9)
-        self.assertEqual(stored_state["source"], "un_wpp")
+        self.assertEqual(stored_state["source"], "UN WPP 2024 Medium Variant")
         self.assertEqual(stored_state["last_anchor_year"], 2026)
 
     def test_bootstrap_population_system_starts_updater_when_enabled(self):
@@ -357,15 +350,7 @@ class PopulationModelTests(unittest.TestCase):
         self.assertEqual(limited.status_code, 429)
 
     def test_admin_reanchor_requires_valid_token(self):
-        anchor_bundle = {
-            "population": 8_100_000_000,
-            "births_per_second": 4.4,
-            "deaths_per_second": 1.9,
-            "source": "un_wpp",
-            "anchor_year": 2026,
-            "data_year": 2026,
-        }
-        with humanity_app.app.test_client() as client, patch.object(humanity_app, "ADMIN_REANCHOR_TOKEN", "secret-token"), patch.object(humanity_app._pop_module, "get_authoritative_population_anchor", return_value=anchor_bundle):
+        with humanity_app.app.test_client() as client, patch.object(humanity_app, "ADMIN_REANCHOR_TOKEN", "secret-token"):
             forbidden = client.post("/admin/reanchor")
             allowed = client.post(
                 "/admin/reanchor",
@@ -375,6 +360,8 @@ class PopulationModelTests(unittest.TestCase):
 
         self.assertEqual(forbidden.status_code, 403)
         self.assertNotEqual(allowed.status_code, 403)
+        self.assertIn("anchor", allowed.get_json())
+        self.assertEqual(allowed.get_json()["anchor"]["baselinePopulation"], 8_100_000_000)
 
 
 if __name__ == "__main__":

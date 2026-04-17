@@ -92,6 +92,7 @@ python security_audit.py
 | `RUN_UPDATER` | `0` | Run annual anchor checker (1/0) |
 | `POP_ANCHOR_MONTH` | `1` | Annual anchor month |
 | `POP_ANCHOR_DAY` | `1` | Annual anchor day |
+| `WPP_DATA_DIR` | repo root | Directory containing the three UN WPP CSV files |
 
 ## 🛡️ Security Best Practices
 
@@ -124,6 +125,7 @@ DEBUG = os.getenv("FLASK_DEBUG") == "1"
 PORT = int(os.getenv("PORT", "5000"))
 anchor_month = int(os.getenv("POP_ANCHOR_MONTH", "1"))
 anchor_day = int(os.getenv("POP_ANCHOR_DAY", "1"))
+wpp_data_dir = os.getenv("WPP_DATA_DIR")
 
 # SMTP configuration:
 smtp_server = os.getenv('SMTP_SERVER', 'smtp.mailfence.com')
@@ -148,6 +150,7 @@ heroku config:set SMTP_PASSWORD=your-app-password
 heroku config:set RECIPIENT_EMAIL=contact@yourdomain.com
 heroku config:set POP_ANCHOR_MONTH=1
 heroku config:set POP_ANCHOR_DAY=1
+heroku config:set WPP_DATA_DIR=/app/wpp
 heroku config:set ADMIN_REANCHOR_TOKEN=your-admin-token
 heroku config:set DOMAIN=yourdomain.com
 ```
@@ -164,6 +167,7 @@ environment:
   - RECIPIENT_EMAIL=${RECIPIENT_EMAIL}
     - POP_ANCHOR_MONTH=${POP_ANCHOR_MONTH}
     - POP_ANCHOR_DAY=${POP_ANCHOR_DAY}
+    - WPP_DATA_DIR=${WPP_DATA_DIR}
     - ADMIN_REANCHOR_TOKEN=${ADMIN_REANCHOR_TOKEN}
   - DOMAIN=${DOMAIN}
 ```

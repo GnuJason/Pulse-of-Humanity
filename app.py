@@ -187,12 +187,10 @@ def population():
     pop = state["population"]
     src = state["source"]
     ts = datetime.now(timezone.utc).isoformat(timespec="seconds")
-    if src == "un_wpp":
-        print(f"[{ts}] [INFO] Using UN WPP annual anchor: {pop:,}")
-    elif src == "world_bank":
-        print(f"[{ts}] [INFO] Using World Bank annual anchor: {pop:,}")
-    else:
+    if src == "fallback":
         print(f"[{ts}] [WARN] Using hardcoded fallback anchor: {pop:,}")
+    else:
+        print(f"[{ts}] [INFO] Using annual CSV anchor source {src}: {pop:,}")
     return jsonify({"population": pop, "source": src, "cached": True, "last_updated": state["last_updated"]})
 
 
@@ -227,7 +225,7 @@ def admin_reanchor():
 
     return jsonify({
         "status": "ok",
-        "liveState": get_live_state_contract(),
+        "anchor": get_live_state_contract(),
     })
 
 @app.route("/contact", methods=["GET", "POST"])

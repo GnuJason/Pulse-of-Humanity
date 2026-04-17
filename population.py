@@ -8,7 +8,8 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 
-import requests
+from population_ingest import YEAR as DEFAULT_WPP_YEAR
+from population_ingest import build_anchor as ingest_population_anchor
 
 
 STATE_PATH = Path("state.json")
@@ -34,28 +35,13 @@ STATE_SCHEMA_VERSION = 5
 ANCHOR_MONTH = int(os.getenv("POP_ANCHOR_MONTH", "1"))
 ANCHOR_DAY = int(os.getenv("POP_ANCHOR_DAY", "1"))
 
-UN_BASE_URL = "https://population.un.org/dataportalapi/api/v1"
-UN_WORLD_LOCATION_ID = 900
-UN_POPULATION_INDICATOR_ID = 49
-UN_BIRTH_RATE_INDICATOR_ID = 55
-UN_DEATH_RATE_INDICATOR_ID = 59
-
-WORLD_BANK_BASE_URL = "https://api.worldbank.org/v2"
-WORLD_BANK_WORLD_CODE = "WLD"
-WORLD_BANK_POPULATION_INDICATOR = "SP.POP.TOTL"
-WORLD_BANK_BIRTH_RATE_INDICATOR = "SP.DYN.CBRT.IN"
-WORLD_BANK_DEATH_RATE_INDICATOR = "SP.DYN.CDRT.IN"
+WPP_DEFAULT_YEAR = int(os.getenv("WPP_DEFAULT_YEAR", str(DEFAULT_WPP_YEAR)))
+WPP_DATA_DIR = os.getenv("WPP_DATA_DIR")
 
 FALLBACK_BASELINE_POPULATION = 8_123_456_789
 BIRTHS_PER_SEC = 4.3
 DEATHS_PER_SEC = 1.8
 NET_PER_SEC = BIRTHS_PER_SEC - DEATHS_PER_SEC
-
-UA_HEADERS = {
-    "User-Agent": "Mozilla/5.0 (PulseOfHumanity/1.0; +https://example.com)",
-    "Accept": "application/json,text/html;q=0.9,*/*;q=0.8",
-}
-
 
 def utc_now():
     return datetime.now(timezone.utc)
@@ -208,156 +194,20 @@ def reanchor_continent_shares(state, current_state):
     }
 
 
-def _request_json(url, timeout=12):
+def get_ingested_anchor(target_year):
     try:
-        response = requests.get(url, headers=UA_HEADERS, timeout=timeout)
-        response.raise_for_status()
-        return response.json()
-    except requests.exceptions.Timeout:
-        print(f"[ERROR] Timeout fetching {url}")
+        anchor = ingest_population_anchor(year=int(target_year), data_dir=WPP_DATA_DIR)
+        return {
+            "population": int(float(anchor["baseline_population"])),
+            "births_per_second": float(anchor["births_per_second"]),
+            "deaths_per_second": float(anchor["deaths_per_second"]),
+            "source": anchor["source"],
+            "anchor_year": int(anchor["last_anchor_year"]),
+            "data_year": int(anchor["last_anchor_year"]),
+        }
     except Exception as exc:
-        print(f"[ERROR] Failed request for {url}: {exc}")
-    return None
-
-
-def _fetch_un_records(relative_path):
-    records = []
-    next_url = f"{UN_BASE_URL}{relative_path}"
-    while next_url:
-        payload = _request_json(next_url)
-        if not payload:
-            return None
-        records.extend(payload.get("data", []))
-        next_url = payload.get("nextPage")
-    return records
-
-
-def _choose_un_record(records, target_year, require_both_sexes=False):
-    candidates = []
-    for record in records:
-        value = record.get("value")
-        if value is None:
-            continue
-        try:
-            year = int(record.get("timeLabel"))
-        except (TypeError, ValueError):
-            continue
-        if year > target_year:
-            continue
-        variant = record.get("variant")
-        sex = record.get("sex")
-        variant_rank = 0 if variant == "Median" else 1
-        sex_rank = 0 if (not require_both_sexes or sex == "Both sexes") else 1
-        exact_rank = 0 if year == target_year else 1
-        candidates.append(((exact_rank, sex_rank, variant_rank, -year), record))
-
-    if not candidates:
+        print(f"[ERROR] Failed to ingest WPP anchor for {target_year}: {exc}")
         return None
-
-    candidates.sort(key=lambda item: item[0])
-    return candidates[0][1]
-
-
-def _build_anchor_bundle(population, crude_birth_rate, crude_death_rate, source, anchor_year, data_year):
-    year_seconds = seconds_in_year(anchor_year)
-    annual_births = float(population) * float(crude_birth_rate) / 1000.0
-    annual_deaths = float(population) * float(crude_death_rate) / 1000.0
-    return {
-        "population": int(float(population)),
-        "births_per_second": annual_births / year_seconds,
-        "deaths_per_second": annual_deaths / year_seconds,
-        "source": source,
-        "anchor_year": int(anchor_year),
-        "data_year": int(data_year),
-    }
-
-
-def get_un_anchor(target_year):
-    relative_path = (
-        f"/data/indicators/{UN_POPULATION_INDICATOR_ID},{UN_BIRTH_RATE_INDICATOR_ID},{UN_DEATH_RATE_INDICATOR_ID}"
-        f"/locations/{UN_WORLD_LOCATION_ID}/start/{target_year}/end/{target_year}?pageSize=1000"
-    )
-    records = _fetch_un_records(relative_path)
-    if not records:
-        return None
-
-    by_indicator = {}
-    for record in records:
-        indicator_id = record.get("indicatorId") or record.get("indicator")
-        try:
-            indicator_id = int(indicator_id)
-        except (TypeError, ValueError):
-            continue
-        by_indicator.setdefault(indicator_id, []).append(record)
-
-    population_record = _choose_un_record(by_indicator.get(UN_POPULATION_INDICATOR_ID, []), target_year, require_both_sexes=True)
-    birth_record = _choose_un_record(by_indicator.get(UN_BIRTH_RATE_INDICATOR_ID, []), target_year)
-    death_record = _choose_un_record(by_indicator.get(UN_DEATH_RATE_INDICATOR_ID, []), target_year)
-    if not population_record or not birth_record or not death_record:
-        return None
-
-    data_year = min(
-        int(population_record.get("timeLabel", target_year)),
-        int(birth_record.get("timeLabel", target_year)),
-        int(death_record.get("timeLabel", target_year)),
-    )
-    return _build_anchor_bundle(
-        population_record["value"],
-        birth_record["value"],
-        death_record["value"],
-        "un_wpp",
-        target_year,
-        data_year,
-    )
-
-
-def _get_world_bank_indicator_value(indicator, target_year):
-    url = (
-        f"{WORLD_BANK_BASE_URL}/country/{WORLD_BANK_WORLD_CODE}/indicator/{indicator}"
-        "?format=json&per_page=100"
-    )
-    payload = _request_json(url)
-    if not payload or len(payload) < 2:
-        return None
-
-    entries = payload[1] or []
-    best_entry = None
-    best_year = None
-    for entry in entries:
-        value = entry.get("value")
-        if value is None:
-            continue
-        try:
-            year = int(entry.get("date"))
-        except (TypeError, ValueError):
-            continue
-        if year > target_year:
-            continue
-        if best_year is None or year > best_year:
-            best_entry = entry
-            best_year = year
-
-    if best_entry is None:
-        return None
-    return {"value": best_entry["value"], "year": best_year}
-
-
-def get_world_bank_anchor(target_year):
-    population = _get_world_bank_indicator_value(WORLD_BANK_POPULATION_INDICATOR, target_year)
-    birth_rate = _get_world_bank_indicator_value(WORLD_BANK_BIRTH_RATE_INDICATOR, target_year)
-    death_rate = _get_world_bank_indicator_value(WORLD_BANK_DEATH_RATE_INDICATOR, target_year)
-    if not population or not birth_rate or not death_rate:
-        return None
-
-    data_year = min(population["year"], birth_rate["year"], death_rate["year"])
-    return _build_anchor_bundle(
-        population["value"],
-        birth_rate["value"],
-        death_rate["value"],
-        "world_bank",
-        target_year,
-        data_year,
-    )
 
 
 def get_fallback_anchor(target_year):
@@ -372,17 +222,16 @@ def get_fallback_anchor(target_year):
 
 
 def get_authoritative_population_anchor(target_year=None, allow_fallback=True):
-    target_year = int(target_year or get_effective_anchor_year())
+    target_year = int(target_year if target_year is not None else max(get_effective_anchor_year(), WPP_DEFAULT_YEAR))
     now = time.time()
     cached_anchor = _CACHE.get("anchor")
     if cached_anchor and _CACHE.get("year") == target_year and (now - _CACHE.get("ts", 0.0) < CACHE_TTL):
         return dict(cached_anchor)
 
-    for fetcher in (get_un_anchor, get_world_bank_anchor):
-        anchor = fetcher(target_year)
-        if anchor:
-            _CACHE.update({"anchor": dict(anchor), "year": target_year, "ts": now})
-            return anchor
+    anchor = get_ingested_anchor(target_year)
+    if anchor:
+        _CACHE.update({"anchor": dict(anchor), "year": target_year, "ts": now})
+        return anchor
 
     if not allow_fallback:
         return None
