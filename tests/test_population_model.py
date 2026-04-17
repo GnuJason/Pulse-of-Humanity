@@ -14,6 +14,7 @@ class PopulationModelTests(unittest.TestCase):
         self.state_patch = patch.object(humanity_app, "STATE_PATH", self.state_path)
         self.state_patch.start()
         humanity_app._CACHE.update({"population": None, "source": None, "ts": 0.0})
+        humanity_app._pop_module.UPDATER_THREAD = None
 
     def tearDown(self):
         self.state_patch.stop()
@@ -34,6 +35,8 @@ class PopulationModelTests(unittest.TestCase):
 
         self.assertEqual(state["version"], humanity_app.STATE_SCHEMA_VERSION)
         self.assertFalse(state["refresh_pending"])
+        self.assertEqual(state["births_per_second"], humanity_app.BIRTHS_PER_SEC)
+        self.assertEqual(state["deaths_per_second"], humanity_app.DEATHS_PER_SEC)
         self.assertAlmostEqual(sum(c["baseline_share"] for c in state["continents"].values()), 1.0)
         self.assertAlmostEqual(sum(c["birth_share"] for c in state["continents"].values()), 1.0)
         self.assertAlmostEqual(sum(c["death_share"] for c in state["continents"].values()), 1.0)
@@ -131,6 +134,8 @@ class PopulationModelTests(unittest.TestCase):
         refreshed_state = humanity_app.load_state()
         self.assertEqual(refreshed_state["baseline_population"], 8_100_000_000)
         self.assertEqual(refreshed_state["source"], "api_ninjas")
+        self.assertEqual(refreshed_state["births_per_second"], humanity_app.BIRTHS_PER_SEC)
+        self.assertEqual(refreshed_state["deaths_per_second"], humanity_app.DEATHS_PER_SEC)
         self.assertFalse(refreshed_state["refresh_pending"])
 
     def test_refresh_without_pending_respects_sync_interval(self):
@@ -151,7 +156,7 @@ class PopulationModelTests(unittest.TestCase):
 
         self.assertFalse(updated)
 
-    def test_live_state_and_population_endpoint_are_consistent(self):
+    def test_live_state_route_returns_authoritative_anchor_contract(self):
         baseline_time = humanity_app.parse_timestamp("2026-03-30T00:00:00Z")
         self.write_state(
             humanity_app.build_initial_state(
@@ -162,17 +167,24 @@ class PopulationModelTests(unittest.TestCase):
         )
 
         with humanity_app.app.test_client() as client:
-            with patch.object(humanity_app, "utc_now", return_value=humanity_app.parse_timestamp("2026-03-30T00:01:00Z")):
+            with patch.object(humanity_app._pop_module, "utc_now", return_value=humanity_app.parse_timestamp("2026-03-30T00:01:00Z")):
                 live_response = client.get("/api/live-state")
-                population_response = client.get("/population")
 
         self.assertEqual(live_response.status_code, 200)
-        self.assertEqual(population_response.status_code, 200)
         live_payload = live_response.get_json()
-        population_payload = population_response.get_json()
-        self.assertEqual(live_payload["population"], population_payload["population"])
-        self.assertEqual(live_payload["last_updated"], population_payload["last_updated"])
-        self.assertEqual(sum(c["population"] for c in live_payload["continents"].values()), live_payload["population"])
+        self.assertEqual(
+            set(live_payload.keys()),
+            {"baselinePopulation", "baselineTimestamp", "birthsPerSecond", "deathsPerSecond", "serverTimestamp", "source"}
+        )
+        self.assertEqual(live_payload["baselinePopulation"], 8_000_000_000)
+        self.assertEqual(live_payload["baselineTimestamp"], "2026-03-30T00:00:00Z")
+        self.assertEqual(live_payload["birthsPerSecond"], humanity_app.BIRTHS_PER_SEC)
+        self.assertEqual(live_payload["deathsPerSecond"], humanity_app.DEATHS_PER_SEC)
+        self.assertEqual(live_payload["serverTimestamp"], "2026-03-30T00:01:00Z")
+        self.assertEqual(live_payload["source"], "test")
+        self.assertNotIn("population", live_payload)
+        self.assertNotIn("births_today", live_payload)
+        self.assertNotIn("deaths_today", live_payload)
 
     def test_restart_behavior_preserves_deterministic_state(self):
         baseline_time = self.fixed_time("2026-03-30T00:00:00Z")
@@ -212,8 +224,24 @@ class PopulationModelTests(unittest.TestCase):
         stored_state = humanity_app.load_state()
         self.assertEqual(stored_state["baseline_population"], 8_100_000_000)
         self.assertEqual(stored_state["baseline_timestamp"], "2026-03-30T01:00:00Z")
+        self.assertEqual(stored_state["births_per_second"], humanity_app.BIRTHS_PER_SEC)
+        self.assertEqual(stored_state["deaths_per_second"], humanity_app.DEATHS_PER_SEC)
         self.assertEqual(stored_state["source"], "api_ninjas")
         self.assertFalse(stored_state["refresh_pending"])
+
+    def test_bootstrap_population_system_starts_updater_when_enabled(self):
+        with patch.object(humanity_app, "UPDATER_ENABLED", True), patch.object(humanity_app, "start_updater", return_value=True) as start_mock:
+            started = humanity_app.bootstrap_population_system()
+
+        self.assertTrue(started)
+        start_mock.assert_called_once_with()
+
+    def test_bootstrap_population_system_skips_when_disabled(self):
+        with patch.object(humanity_app, "UPDATER_ENABLED", False), patch.object(humanity_app, "start_updater") as start_mock:
+            started = humanity_app.bootstrap_population_system()
+
+        self.assertFalse(started)
+        start_mock.assert_not_called()
 
     def test_live_state_route_allows_sustained_polling_before_burst_limit(self):
         baseline_time = self.fixed_time("2026-03-30T00:00:00Z")

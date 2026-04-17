@@ -52,7 +52,7 @@
 | Endpoint | Method | Description |
 |----------|--------|-------------|
 | `/` | GET | Main population visualization |
-| `/api/live-state` | GET | JSON — current population, births, deaths, continent breakdown |
+| `/api/live-state` | GET | JSON — authoritative ticker anchor: `baselinePopulation`, `baselineTimestamp`, `birthsPerSecond`, `deathsPerSecond`, `serverTimestamp`, `source` |
 | `/population` | GET | JSON — current population and data source |
 | `/health` | GET | Health check for uptime monitoring |
 | `/contact` | GET/POST | Contact form with CSRF + captcha |
@@ -87,7 +87,8 @@ gunicorn --config gunicorn.conf.py app:app
 ```bash
 python validate_env.py      # check environment variables
 python security_audit.py    # run security checks
-python -m pytest tests/ -v  # run test suite (10 tests)
+./venv/bin/python -m pytest tests/test_population_model.py -v
+node --test tests/population_ticker.test.cjs
 ```
 
 ### Environment Variables

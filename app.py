@@ -1,5 +1,6 @@
 import os
 import secrets
+import threading
 from datetime import datetime, timezone
 
 from flask import (
@@ -20,6 +21,8 @@ from population import (
     reconcile_integer_distribution, reanchor_continent_shares,
     build_initial_state, migrate_state, ensure_state_shape,
     calculate_current_state, serialize_current_state,
+    serialize_live_state_contract, serialize_continent_model,
+    get_authoritative_state, get_live_state_contract,
     updater_loop, start_updater, current_population_and_today,
 )
 import population as _pop_module
@@ -48,11 +51,32 @@ def get_current_state(now=None):
     return _pop_module.get_current_state(now=now)
 
 
+def get_authoritative_state():
+    _sync_to_pop()
+    return _pop_module.get_authoritative_state()
+
+
+def get_live_state_contract(now=None):
+    _sync_to_pop()
+    return _pop_module.get_live_state_contract(now=now)
+
+
 def refresh_population_baseline(force=False, now=None):
     _sync_to_pop()
     return _pop_module.refresh_population_baseline(force=force, now=now)
 
 UPDATER_ENABLED = os.getenv("RUN_UPDATER", "0") == "1"
+BOOTSTRAP_LOCK = threading.Lock()
+
+
+def bootstrap_population_system():
+    """Start the baseline refresher in local runs and Gunicorn workers."""
+    _sync_to_pop()
+    if not UPDATER_ENABLED:
+        return False
+
+    with BOOTSTRAP_LOCK:
+        return start_updater()
 
 app = Flask(__name__)
 
@@ -124,36 +148,34 @@ LIVE_STATE_LIMIT = "120 per minute; 5000 per hour"
 
 @app.route("/")
 def index():
-  try:
-    state = serialize_current_state(get_current_state())
-    return render_template(
-      'index.html',
-      population=state["population"],
-      births_today=state["births_today"],
-      deaths_today=state["deaths_today"],
-      last_updated=state["last_updated"],
-      continents_json=state["continents"]
-    )
-  except Exception as e:
-    print(f"[ERROR] Index route failed: {e}")
-    fallback_continents = {
-      name: {
-        "population": data["population"],
-        "births_today": 0,
-        "deaths_today": 0,
-        "births_per_sec": data["births_per_sec"],
-        "deaths_per_sec": data["deaths_per_sec"]
-      }
-      for name, data in BASE_CONTINENTS.items()
-    }
-    return render_template(
-      'index.html',
-      population=8000000000,
-      births_today=372000,
-      deaths_today=155000,
-      last_updated="Fallback data - service initializing",
-      continents_json=fallback_continents
-    )
+    try:
+        current_state = serialize_current_state(get_current_state())
+        authoritative_state = get_authoritative_state()
+        return render_template(
+            'index.html',
+            population=current_state["population"],
+            births_today=current_state["births_today"],
+            deaths_today=current_state["deaths_today"],
+            last_updated=current_state["last_updated"],
+            live_anchor=serialize_live_state_contract(authoritative_state),
+            continents_model_json=serialize_continent_model(authoritative_state)
+        )
+    except Exception as e:
+        print(f"[ERROR] Index route failed: {e}")
+        fallback_state = build_initial_state(
+            now=utc_now(),
+            baseline_population=8_000_000_000,
+            source="fallback"
+        )
+        return render_template(
+            'index.html',
+            population=8000000000,
+            births_today=372000,
+            deaths_today=155000,
+            last_updated="Fallback data - service initializing",
+            live_anchor=serialize_live_state_contract(fallback_state),
+            continents_model_json=serialize_continent_model(fallback_state)
+        )
 
 @app.route("/population")
 def population():
@@ -173,7 +195,7 @@ def population():
 @app.route("/api/live-state")
 @limiter.limit(LIVE_STATE_LIMIT, override_defaults=True)
 def live_state():
-    return jsonify(serialize_current_state(get_current_state()))
+    return jsonify(get_live_state_contract())
 
 @app.route("/contact", methods=["GET", "POST"])
 @limiter.limit("5 per hour")  # Rate limit for contact form
@@ -318,10 +340,9 @@ def sitemap_xml():
     return response
 
 if __name__ == "__main__":
-    if UPDATER_ENABLED:
-      print("[INFO] Starting updater loop (RUN_UPDATER=1)")
-      start_updater()
+    if bootstrap_population_system():
+        print("[INFO] Started updater loop (RUN_UPDATER=1)")
     else:
-      print("[INFO] Skipping updater loop (RUN_UPDATER not set to 1)")
+        print("[INFO] Skipping updater loop (RUN_UPDATER not set to 1 or already running)")
 
     app.run(host="0.0.0.0", port=PORT, debug=DEBUG)

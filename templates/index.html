@@ -161,22 +161,20 @@
 {% block scripts %}
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r134/three.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/vanta@0.5.24/dist/vanta.globe.min.js"></script>
+  <script src="{{ url_for('static', filename='js/population_ticker.js') }}"></script>
   <script>
   document.addEventListener("DOMContentLoaded", function () {
     document.getElementById('current-year').textContent = new Date().getFullYear();
     if (window.feather) feather.replace();
 
-    const continents = {{ continents_json | tojson | safe }};
-
+    const ticker = window.PopulationTicker;
     const liveStateUrl = "{{ url_for('live_state') }}";
-    let displayState = {
-      population: {{ population }},
-      births_today: {{ births_today }},
-      deaths_today: {{ deaths_today }},
-      continents: JSON.parse(JSON.stringify(continents))
-    };
-    let targetState = JSON.parse(JSON.stringify(displayState));
-    let currentLastUpdated = {{ last_updated | tojson }};
+    const initialAnchor = {{ live_anchor | tojson | safe }};
+    const continentsModel = {{ continents_model_json | tojson | safe }};
+    const liveContinents = {};
+    let currentAnchor = null;
+    let currentStatusText = {{ last_updated | tojson }};
+    let activeTooltipRegionId = null;
 
     const tooltip = document.getElementById('region-tooltip');
 
@@ -184,8 +182,19 @@
       return x.toLocaleString('en-US');
     }
 
+    function setAnchor(snapshot, requestStartedAtMs, responseReceivedAtMs) {
+      const clockOffsetMs = ticker.computeClockOffset(
+        snapshot.serverTimestamp,
+        requestStartedAtMs,
+        responseReceivedAtMs
+      );
+
+      currentAnchor = ticker.normalizeAnchor(snapshot, clockOffsetMs);
+      currentStatusText = 'Source: ' + snapshot.source + ' | Anchor: ' + snapshot.baselineTimestamp;
+    }
+
     function updateTooltip(regionId) {
-      const c = continents[regionId];
+      const c = liveContinents[regionId];
       if (!c) {
         tooltip.innerHTML = '<strong>' + regionId + '</strong><br>No data';
         return;
@@ -198,6 +207,7 @@
     }
 
     function showTooltip(e, regionId) {
+      activeTooltipRegionId = regionId;
       updateTooltip(regionId);
       var viewportWidth = window.innerWidth;
       var viewportHeight = window.innerHeight;
@@ -224,7 +234,10 @@
     document.querySelectorAll('.continent').forEach(function(cont) {
       /* Mouse events */
       cont.addEventListener('mousemove', function(e) { showTooltip(e, e.currentTarget.id); });
-      cont.addEventListener('mouseleave', function() { tooltip.classList.add('hidden'); });
+      cont.addEventListener('mouseleave', function() {
+        activeTooltipRegionId = null;
+        tooltip.classList.add('hidden');
+      });
 
       /* Touch events */
       cont.addEventListener('touchstart', function(e) {
@@ -232,7 +245,10 @@
         showTooltip(e, e.currentTarget.id);
       }, { passive: false });
       cont.addEventListener('touchend', function() {
-        setTimeout(function() { tooltip.classList.add('hidden'); }, 2000);
+        setTimeout(function() {
+          activeTooltipRegionId = null;
+          tooltip.classList.add('hidden');
+        }, 2000);
       });
 
       /* Keyboard events */
@@ -246,6 +262,7 @@
         tooltip.classList.remove('hidden');
       });
       cont.addEventListener('blur', function() {
+        activeTooltipRegionId = null;
         tooltip.classList.add('hidden');
         tooltip.style.transform = '';
       });
@@ -287,45 +304,20 @@
       console.warn("VANTA.js init failed:", err);
     }
 
-    function easeValue(current, target) {
-      var delta = target - current;
-      if (Math.abs(delta) < 1) return target;
-      return current + (delta * 0.18);
-    }
-
-    function applyLiveState(snapshot) {
-      targetState.population = snapshot.population;
-      targetState.births_today = snapshot.births_today;
-      targetState.deaths_today = snapshot.deaths_today;
-      currentLastUpdated = snapshot.last_updated;
-
-      for (var name in snapshot.continents) {
-        if (!snapshot.continents.hasOwnProperty(name)) continue;
-        var data = snapshot.continents[name];
-        if (!targetState.continents[name]) {
-          targetState.continents[name] = data;
-        } else {
-          targetState.continents[name].population = data.population;
-          targetState.continents[name].births_today = data.births_today;
-          targetState.continents[name].deaths_today = data.deaths_today;
-          targetState.continents[name].births_per_sec = data.births_per_sec;
-          targetState.continents[name].deaths_per_sec = data.deaths_per_sec;
-        }
-      }
-    }
-
     /* --- Polling with visibility-awareness --- */
     var pollIntervalId = null;
     var POLL_MS = 5000;
 
     async function fetchLiveState() {
+      var requestStartedAtMs = Date.now();
       try {
         var response = await fetch(liveStateUrl, {
           headers: { "Accept": "application/json" },
           cache: "no-store"
         });
         if (!response.ok) throw new Error("HTTP " + response.status);
-        applyLiveState(await response.json());
+        var snapshot = await response.json();
+        setAnchor(snapshot, requestStartedAtMs, Date.now());
       } catch (err) {
         console.error("Live state fetch failed", err);
       }
@@ -349,36 +341,40 @@
       if (document.hidden) {
         stopPolling();
       } else {
+        fetchLiveState();
         startPolling();
       }
     });
+
+    window.addEventListener('online', fetchLiveState);
+
+    setAnchor(initialAnchor, Date.now(), Date.now());
 
     startPolling();
 
     /* --- Render loop --- */
     function renderLoop() {
-      displayState.population = easeValue(displayState.population, targetState.population);
-      displayState.births_today = easeValue(displayState.births_today, targetState.births_today);
-      displayState.deaths_today = easeValue(displayState.deaths_today, targetState.deaths_today);
-
-      document.getElementById('population-counter').textContent = fmt(Math.floor(displayState.population));
-      document.getElementById('births-today').textContent = fmt(Math.floor(displayState.births_today));
-      document.getElementById('deaths-today').textContent = fmt(Math.floor(displayState.deaths_today));
-      document.getElementById('last-updated').textContent = 'Last updated: ' + currentLastUpdated;
-
-      for (var name in targetState.continents) {
-        if (!targetState.continents.hasOwnProperty(name)) continue;
-        var data = targetState.continents[name];
-        if (!displayState.continents[name]) {
-          displayState.continents[name] = JSON.parse(JSON.stringify(data));
-          continue;
-        }
-        displayState.continents[name].population = easeValue(displayState.continents[name].population, data.population);
-        displayState.continents[name].births_today = easeValue(displayState.continents[name].births_today, data.births_today);
-        displayState.continents[name].deaths_today = easeValue(displayState.continents[name].deaths_today, data.deaths_today);
+      if (!currentAnchor) {
+        requestAnimationFrame(renderLoop);
+        return;
       }
 
-      Object.assign(continents, displayState.continents);
+      var authoritativeNowMs = ticker.getAuthoritativeNow(currentAnchor.clockOffsetMs, Date.now());
+      var dailyCounts = ticker.computeDailyCounts(currentAnchor, authoritativeNowMs);
+
+      document.getElementById('population-counter').textContent = fmt(Math.floor(ticker.computeWorldPopulation(currentAnchor, authoritativeNowMs)));
+      document.getElementById('births-today').textContent = fmt(Math.floor(dailyCounts.birthsToday));
+      document.getElementById('deaths-today').textContent = fmt(Math.floor(dailyCounts.deathsToday));
+      document.getElementById('last-updated').textContent = currentStatusText;
+
+      for (var name in continentsModel) {
+        if (!continentsModel.hasOwnProperty(name)) continue;
+        liveContinents[name] = ticker.computeContinentState(currentAnchor, continentsModel[name], authoritativeNowMs);
+      }
+
+      if (activeTooltipRegionId && !tooltip.classList.contains('hidden')) {
+        updateTooltip(activeTooltipRegionId);
+      }
 
       if (!document.hidden) {
         requestAnimationFrame(renderLoop);

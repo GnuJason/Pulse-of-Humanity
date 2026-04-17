@@ -16,6 +16,8 @@ import requests
 # ---------------------------------------------------------------------------
 STATE_PATH = Path("state.json")
 STATE_LOCK = threading.Lock()
+UPDATER_THREAD_LOCK = threading.Lock()
+UPDATER_THREAD = None
 
 BASE_CONTINENTS = {
     "Africa":        {"population": 1420000000, "births_per_sec": 2.7, "deaths_per_sec": 0.9},
@@ -30,7 +32,7 @@ BASE_CONTINENTS = {
 _CACHE = {"population": None, "source": None, "ts": 0.0}
 CACHE_TTL = int(os.getenv("POP_CACHE_TTL", "60"))
 SYNC_INTERVAL_SECONDS = int(os.getenv("POP_SYNC_INTERVAL", "3600"))
-STATE_SCHEMA_VERSION = 3
+STATE_SCHEMA_VERSION = 4
 
 UA_HEADERS = {
     "User-Agent": "Mozilla/5.0 (PulseOfHumanity/1.0; +https://example.com)",
@@ -259,6 +261,8 @@ def build_initial_state(now=None, baseline_population=None, source="fallback"):
         "version": STATE_SCHEMA_VERSION,
         "baseline_population": int(baseline_population),
         "baseline_timestamp": isoformat_z(now),
+        "births_per_second": BIRTHS_PER_SEC,
+        "deaths_per_second": DEATHS_PER_SEC,
         "source": source,
         "last_sync_timestamp": isoformat_z(now),
         "refresh_pending": False,
@@ -293,6 +297,8 @@ def migrate_state(state):
         "version": STATE_SCHEMA_VERSION,
         "baseline_population": int(state.get("population", 8_123_456_789)),
         "baseline_timestamp": baseline_timestamp,
+        "births_per_second": float(state.get("births_per_second", BIRTHS_PER_SEC)),
+        "deaths_per_second": float(state.get("deaths_per_second", DEATHS_PER_SEC)),
         "source": source,
         "last_sync_timestamp": state.get("last_sync_timestamp", baseline_timestamp),
         "refresh_pending": bool(state.get("refresh_pending", source == "migrated")),
@@ -308,6 +314,8 @@ def ensure_state_shape(state):
         "version": STATE_SCHEMA_VERSION,
         "baseline_population": int(state.get("baseline_population", 8_123_456_789)),
         "baseline_timestamp": state.get("baseline_timestamp", isoformat_z(utc_now())),
+        "births_per_second": float(state.get("births_per_second", BIRTHS_PER_SEC)),
+        "deaths_per_second": float(state.get("deaths_per_second", DEATHS_PER_SEC)),
         "source": state.get("source", "fallback"),
         "last_sync_timestamp": state.get("last_sync_timestamp", state.get("baseline_timestamp", isoformat_z(utc_now()))),
         "refresh_pending": bool(state.get("refresh_pending", state.get("source") == "migrated")),
@@ -326,9 +334,11 @@ def calculate_current_state(state, now=None):
     seconds_today = max(0.0, (now - midnight).total_seconds())
 
     baseline_population = float(state["baseline_population"])
-    population = max(0.0, baseline_population + (NET_PER_SEC * elapsed_seconds))
-    births_today = BIRTHS_PER_SEC * seconds_today
-    deaths_today = DEATHS_PER_SEC * seconds_today
+    births_per_second = float(state.get("births_per_second", BIRTHS_PER_SEC))
+    deaths_per_second = float(state.get("deaths_per_second", DEATHS_PER_SEC))
+    population = max(0.0, baseline_population + ((births_per_second - deaths_per_second) * elapsed_seconds))
+    births_today = births_per_second * seconds_today
+    deaths_today = deaths_per_second * seconds_today
     current_state = {
         "population": population,
         "births_today": births_today,
@@ -336,6 +346,8 @@ def calculate_current_state(state, now=None):
         "last_updated": isoformat_z(now),
         "source": state.get("source", "fallback"),
         "baseline_timestamp": state["baseline_timestamp"],
+        "births_per_second": births_per_second,
+        "deaths_per_second": deaths_per_second,
         "last_sync_timestamp": state.get("last_sync_timestamp", state["baseline_timestamp"]),
         "refresh_pending": bool(state.get("refresh_pending", False)),
         "continents": {},
@@ -343,8 +355,8 @@ def calculate_current_state(state, now=None):
 
     for name in BASE_CONTINENTS:
         continent_state = state["continents"][name]
-        births_per_sec = continent_state["birth_share"] * BIRTHS_PER_SEC
-        deaths_per_sec = continent_state["death_share"] * DEATHS_PER_SEC
+        births_per_sec = continent_state["birth_share"] * births_per_second
+        deaths_per_sec = continent_state["death_share"] * deaths_per_second
         baseline_continent_population = continent_state["baseline_share"] * baseline_population
         current_state["continents"][name] = {
             "population": max(0.0, baseline_continent_population + ((births_per_sec - deaths_per_sec) * elapsed_seconds)),
@@ -381,6 +393,8 @@ def serialize_current_state(current_state):
         "last_updated": current_state["last_updated"],
         "source": current_state["source"],
         "baseline_timestamp": current_state["baseline_timestamp"],
+        "births_per_second": current_state["births_per_second"],
+        "deaths_per_second": current_state["deaths_per_second"],
         "last_sync_timestamp": current_state["last_sync_timestamp"],
         "continents": {
             name: {
@@ -392,6 +406,33 @@ def serialize_current_state(current_state):
             }
             for name, data in current_state["continents"].items()
         },
+    }
+
+
+def serialize_live_state_contract(state, now=None):
+    now = now or utc_now()
+    return {
+        "baselinePopulation": int(state["baseline_population"]),
+        "baselineTimestamp": state["baseline_timestamp"],
+        "birthsPerSecond": float(state.get("births_per_second", BIRTHS_PER_SEC)),
+        "deathsPerSecond": float(state.get("deaths_per_second", DEATHS_PER_SEC)),
+        "serverTimestamp": isoformat_z(now),
+        "source": state.get("source", "fallback"),
+    }
+
+
+def serialize_continent_model(state):
+    births_per_second = float(state.get("births_per_second", BIRTHS_PER_SEC))
+    deaths_per_second = float(state.get("deaths_per_second", DEATHS_PER_SEC))
+    return {
+        name: {
+            "baselineShare": continent_state["baseline_share"],
+            "birthShare": continent_state["birth_share"],
+            "deathShare": continent_state["death_share"],
+            "birthsPerSecond": continent_state["birth_share"] * births_per_second,
+            "deathsPerSecond": continent_state["death_share"] * deaths_per_second,
+        }
+        for name, continent_state in state["continents"].items()
     }
 
 # ---------------------------------------------------------------------------
@@ -437,6 +478,17 @@ def get_current_state(now=None):
         return calculate_current_state(state, now=now)
 
 
+def get_authoritative_state():
+    with STATE_LOCK:
+        return load_state()
+
+
+def get_live_state_contract(now=None):
+    with STATE_LOCK:
+        state = load_state()
+        return serialize_live_state_contract(state, now=now)
+
+
 def refresh_population_baseline(force=False, now=None):
     now = now or utc_now()
     with STATE_LOCK:
@@ -471,8 +523,14 @@ def updater_loop():
 
 
 def start_updater():
-    t = threading.Thread(target=updater_loop, daemon=True)
-    t.start()
+    global UPDATER_THREAD
+    with UPDATER_THREAD_LOCK:
+        if UPDATER_THREAD is not None and UPDATER_THREAD.is_alive():
+            return False
+
+        UPDATER_THREAD = threading.Thread(target=updater_loop, daemon=True, name="population-updater")
+        UPDATER_THREAD.start()
+        return True
 
 
 def current_population_and_today():

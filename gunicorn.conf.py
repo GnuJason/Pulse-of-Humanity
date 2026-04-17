@@ -6,3 +6,9 @@ max_requests = 1000
 max_requests_jitter = 100
 preload_app = True
 worker_class = "sync"
+
+
+def post_fork(server, worker):
+	from app import bootstrap_population_system
+
+	bootstrap_population_system()
