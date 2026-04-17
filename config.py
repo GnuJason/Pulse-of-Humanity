@@ -24,13 +24,13 @@ class Config:
     SMTP_PASSWORD = os.environ.get('SMTP_PASSWORD')
     RECIPIENT_EMAIL = os.environ.get('RECIPIENT_EMAIL')
     
-    # API Configuration
-    API_NINJAS_KEY = os.environ.get('API_NINJAS_KEY')
-    
     # Application Configuration
     CACHE_TTL = int(os.environ.get('POP_CACHE_TTL', '60'))
     DOMAIN = os.environ.get('DOMAIN', 'localhost:5000')
     RUN_UPDATER = os.environ.get('RUN_UPDATER', '0').lower() in ('1', 'true', 'yes')
+    POP_ANCHOR_MONTH = int(os.environ.get('POP_ANCHOR_MONTH', '1'))
+    POP_ANCHOR_DAY = int(os.environ.get('POP_ANCHOR_DAY', '1'))
+    ADMIN_REANCHOR_TOKEN = os.environ.get('ADMIN_REANCHOR_TOKEN')
     
     @classmethod
     def validate_required_vars(cls) -> list[str]:
@@ -52,10 +52,6 @@ class Config:
         if not cls.RECIPIENT_EMAIL:
             missing_vars.append('RECIPIENT_EMAIL')
         
-        # Required for API functionality
-        if not cls.API_NINJAS_KEY:
-            missing_vars.append('API_NINJAS_KEY')
-        
         return missing_vars
     
     @classmethod
@@ -69,11 +65,13 @@ class Config:
             'domain': cls.DOMAIN,
             'cache_ttl': cls.CACHE_TTL,
             'run_updater': cls.RUN_UPDATER,
+            'anchor_month': cls.POP_ANCHOR_MONTH,
+            'anchor_day': cls.POP_ANCHOR_DAY,
             'has_secret_key': bool(cls.SECRET_KEY),
             'has_smtp_username': bool(cls.SMTP_USERNAME),
             'has_smtp_password': bool(cls.SMTP_PASSWORD),
             'has_recipient_email': bool(cls.RECIPIENT_EMAIL),
-            'has_api_key': bool(cls.API_NINJAS_KEY),
+            'has_admin_reanchor_token': bool(cls.ADMIN_REANCHOR_TOKEN),
         }
 
 
@@ -249,4 +247,5 @@ if __name__ == "__main__":
     # Example of masking secrets for logging
     print(f"\n🔐 Secret Key: {mask_secret(config.SECRET_KEY)}")
     print(f"🔐 SMTP Password: {mask_secret(config.SMTP_PASSWORD)}")
-    print(f"🔐 API Key: {mask_secret(config.API_NINJAS_KEY)}")
+    print(f"🗓️ Anchor Date: {config.POP_ANCHOR_MONTH:02d}-{config.POP_ANCHOR_DAY:02d}")
+    print(f"🔐 Admin Re-anchor Token: {mask_secret(config.ADMIN_REANCHOR_TOKEN)}")

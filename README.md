@@ -27,7 +27,7 @@
 
 ## Features
 
-- **Real-time Population Counter** — live-updating display with smooth easing animations
+- **Real-time Population Counter** — live-updating display driven by a deterministic annual demographic anchor
 - **Interactive World Map** — embedded SVG with per-continent population, births, and deaths tooltips
 - **Continental Breakdown** — stat cards showing population share by continent
 - **VANTA.js Globe** — animated 3D globe background for cinematic atmosphere
@@ -52,7 +52,7 @@
 | Endpoint | Method | Description |
 |----------|--------|-------------|
 | `/` | GET | Main population visualization |
-| `/api/live-state` | GET | JSON — authoritative ticker anchor: `baselinePopulation`, `baselineTimestamp`, `birthsPerSecond`, `deathsPerSecond`, `serverTimestamp`, `source` |
+| `/api/live-state` | GET | JSON — authoritative ticker anchor: `baselinePopulation`, `baselineTimestamp`, `birthsPerSecond`, `deathsPerSecond`, `serverTimestamp`, `source`, `lastAnchorYear` |
 | `/population` | GET | JSON — current population and data source |
 | `/health` | GET | Health check for uptime monitoring |
 | `/contact` | GET/POST | Contact form with CSRF + captcha |
@@ -97,8 +97,10 @@ node --test tests/population_ticker.test.cjs
 |----------|----------|---------|-------------|
 | `FLASK_SECRET_KEY` | **Yes** (prod) | random | Session secret key |
 | `PORT` | No | `10000` | Server port |
-| `RUN_UPDATER` | No | `1` | Enable background population sync |
-| `API_NINJAS_KEY` | No | — | API Ninjas key for population data |
+| `RUN_UPDATER` | No | `1` | Enable background annual anchor checks |
+| `POP_ANCHOR_MONTH` | No | `1` | Month for yearly authoritative re-anchor |
+| `POP_ANCHOR_DAY` | No | `1` | Day for yearly authoritative re-anchor |
+| `ADMIN_REANCHOR_TOKEN` | No | — | Token required for `POST /admin/reanchor` |
 | `SMTP_SERVER` | No | `smtp.mailfence.com` | SMTP server for contact form |
 | `SMTP_PORT` | No | `587` | SMTP port |
 | `SMTP_USERNAME` | No | — | SMTP username |
@@ -127,7 +129,7 @@ This project is licensed under the **GNU General Public License v3.0** — see [
 
 ## Acknowledgments
 
-- [API Ninjas](https://api-ninjas.com/) & [Worldometer](https://www.worldometers.info/) — population data
+- [UN World Population Prospects](https://population.un.org/wpp/) & [World Bank Open Data](https://data.worldbank.org/) — authoritative annual demographic anchors
 - [VANTA.js](https://www.vantajs.com/) — animated 3D backgrounds
 - [Tailwind CSS](https://tailwindcss.com/) — utility-first CSS
 - [Natural Earth](https://www.naturalearthdata.com/) — geographic data

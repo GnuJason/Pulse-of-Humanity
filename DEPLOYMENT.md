@@ -18,7 +18,9 @@
    FLASK_DEBUG=0
    RUN_UPDATER=1
    FLASK_SECRET_KEY=<generate-secure-key>
-   API_NINJAS_KEY=<your-api-key>
+   POP_ANCHOR_MONTH=1
+   POP_ANCHOR_DAY=1
+   ADMIN_REANCHOR_TOKEN=<generate-secure-token>
    PORT=10000
    ```
 
@@ -29,9 +31,10 @@
 ## Environment Variables Required
 
 - `FLASK_DEBUG`: Set to "0" for production
-- `RUN_UPDATER`: Set to "1" to enable background data updates
+- `RUN_UPDATER`: Set to "1" to enable background annual anchor checks
 - `FLASK_SECRET_KEY`: Generate a secure random key
-- `API_NINJAS_KEY`: Your API Ninjas key (optional but recommended)
+- `POP_ANCHOR_MONTH` / `POP_ANCHOR_DAY`: Configure the yearly authoritative re-anchor date
+- `ADMIN_REANCHOR_TOKEN`: Optional token for the manual `POST /admin/reanchor` endpoint
 - `PORT`: Will be set automatically by Render (defaults to 10000)
 
 ## Files Created for Deployment
@@ -72,4 +75,4 @@ The app includes an enhanced health check at `/health` that returns:
 - Uses gunicorn with 2 workers
 - Includes connection pooling and request limits
 - Mobile-responsive design with optimized assets
-- Background data updates enabled
+- Background annual anchor checks enabled

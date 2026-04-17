@@ -13,7 +13,7 @@ class PopulationModelTests(unittest.TestCase):
         self.state_path = Path(self.temp_dir.name) / "state.json"
         self.state_patch = patch.object(humanity_app, "STATE_PATH", self.state_path)
         self.state_patch.start()
-        humanity_app._CACHE.update({"population": None, "source": None, "ts": 0.0})
+        humanity_app._CACHE.update({"anchor": None, "year": None, "ts": 0.0})
         humanity_app._pop_module.UPDATER_THREAD = None
 
     def tearDown(self):
@@ -31,10 +31,12 @@ class PopulationModelTests(unittest.TestCase):
             now=self.fixed_time("2026-03-30T00:00:00Z"),
             baseline_population=8_000_000_000,
             source="test",
+            anchor_year=2026,
+            baseline_timestamp="2026-03-30T00:00:00Z",
         )
 
         self.assertEqual(state["version"], humanity_app.STATE_SCHEMA_VERSION)
-        self.assertFalse(state["refresh_pending"])
+        self.assertEqual(state["last_anchor_year"], 2026)
         self.assertEqual(state["births_per_second"], humanity_app.BIRTHS_PER_SEC)
         self.assertEqual(state["deaths_per_second"], humanity_app.DEATHS_PER_SEC)
         self.assertAlmostEqual(sum(c["baseline_share"] for c in state["continents"].values()), 1.0)
@@ -48,6 +50,7 @@ class PopulationModelTests(unittest.TestCase):
             now=baseline_time,
             baseline_population=8_000_000_000,
             source="test",
+            baseline_timestamp="2026-03-30T00:00:00Z",
         )
 
         after_ten_seconds = humanity_app.calculate_current_state(
@@ -73,6 +76,7 @@ class PopulationModelTests(unittest.TestCase):
             now=baseline_time,
             baseline_population=8_000_000_000,
             source="test",
+            baseline_timestamp="2026-03-30T00:00:00Z",
         )
 
         noon_state = humanity_app.calculate_current_state(
@@ -103,14 +107,15 @@ class PopulationModelTests(unittest.TestCase):
         self.assertEqual(state["version"], humanity_app.STATE_SCHEMA_VERSION)
         self.assertIn("baseline_population", state)
         self.assertIn("baseline_timestamp", state)
-        self.assertTrue(state["refresh_pending"])
+        self.assertEqual(state["source"], "migrated")
+        self.assertIn("last_anchor_year", state)
         self.assertEqual(set(state["continents"].keys()), set(humanity_app.BASE_CONTINENTS.keys()))
         self.assertAlmostEqual(sum(c["baseline_share"] for c in state["continents"].values()), 1.0)
         self.assertAlmostEqual(sum(c["birth_share"] for c in state["continents"].values()), 1.0)
         self.assertAlmostEqual(sum(c["death_share"] for c in state["continents"].values()), 1.0)
         self.assertNotIn("baseline_population", state["continents"]["Africa"])
 
-    def test_refresh_pending_state_bypasses_sync_interval_once(self):
+    def test_migrated_state_reanchors_with_authoritative_yearly_data(self):
         self.write_state(
             {
                 "population": 8123457099.0,
@@ -122,9 +127,17 @@ class PopulationModelTests(unittest.TestCase):
             }
         )
         migrated_state = humanity_app.load_state()
-        self.assertTrue(migrated_state["refresh_pending"])
+        self.assertEqual(migrated_state["source"], "migrated")
 
-        with patch.object(humanity_app, "get_population_cached", return_value=(8_100_000_000, "api_ninjas")):
+        anchor_bundle = {
+            "population": 8_100_000_000,
+            "births_per_second": 4.4,
+            "deaths_per_second": 1.9,
+            "source": "un_wpp",
+            "anchor_year": 2026,
+            "data_year": 2026,
+        }
+        with patch.object(humanity_app._pop_module, "get_authoritative_population_anchor", return_value=anchor_bundle):
             updated = humanity_app.refresh_population_baseline(
                 force=False,
                 now=self.fixed_time("2026-03-30T00:05:00Z"),
@@ -133,28 +146,92 @@ class PopulationModelTests(unittest.TestCase):
         self.assertTrue(updated)
         refreshed_state = humanity_app.load_state()
         self.assertEqual(refreshed_state["baseline_population"], 8_100_000_000)
-        self.assertEqual(refreshed_state["source"], "api_ninjas")
-        self.assertEqual(refreshed_state["births_per_second"], humanity_app.BIRTHS_PER_SEC)
-        self.assertEqual(refreshed_state["deaths_per_second"], humanity_app.DEATHS_PER_SEC)
-        self.assertFalse(refreshed_state["refresh_pending"])
+        self.assertEqual(refreshed_state["source"], "un_wpp")
+        self.assertEqual(refreshed_state["births_per_second"], 4.4)
+        self.assertEqual(refreshed_state["deaths_per_second"], 1.9)
+        self.assertEqual(refreshed_state["last_anchor_year"], 2026)
 
-    def test_refresh_without_pending_respects_sync_interval(self):
+    def test_refresh_without_year_change_is_a_noop(self):
         baseline_time = self.fixed_time("2026-03-30T00:00:00Z")
         self.write_state(
             humanity_app.build_initial_state(
                 now=baseline_time,
                 baseline_population=8_000_000_000,
                 source="initial",
+                anchor_year=2026,
+                baseline_timestamp="2026-03-30T00:00:00Z",
             )
         )
 
-        with patch.object(humanity_app, "get_population_cached", return_value=(8_100_000_000, "api_ninjas")):
+        anchor_bundle = {
+            "population": 8_100_000_000,
+            "births_per_second": 4.4,
+            "deaths_per_second": 1.9,
+            "source": "un_wpp",
+            "anchor_year": 2026,
+            "data_year": 2026,
+        }
+        with patch.object(humanity_app._pop_module, "get_authoritative_population_anchor", return_value=anchor_bundle):
             updated = humanity_app.refresh_population_baseline(
                 force=False,
                 now=self.fixed_time("2026-03-30T00:05:00Z"),
             )
 
         self.assertFalse(updated)
+
+    def test_refresh_reanchors_when_crossing_into_new_anchor_year(self):
+        baseline_time = self.fixed_time("2026-01-01T00:00:00Z")
+        self.write_state(
+            humanity_app.build_initial_state(
+                now=baseline_time,
+                baseline_population=8_000_000_000,
+                source="initial",
+                anchor_year=2026,
+            )
+        )
+
+        anchor_bundle = {
+            "population": 8_140_000_000,
+            "births_per_second": 4.1,
+            "deaths_per_second": 1.7,
+            "source": "world_bank",
+            "anchor_year": 2027,
+            "data_year": 2026,
+        }
+        with patch.object(humanity_app._pop_module, "get_authoritative_population_anchor", return_value=anchor_bundle):
+            updated = humanity_app.refresh_population_baseline(
+                force=False,
+                now=self.fixed_time("2027-01-01T00:00:05Z"),
+            )
+
+        self.assertTrue(updated)
+        refreshed_state = humanity_app.load_state()
+        self.assertEqual(refreshed_state["baseline_population"], 8_140_000_000)
+        self.assertEqual(refreshed_state["source"], "world_bank")
+        self.assertEqual(refreshed_state["last_anchor_year"], 2027)
+        self.assertEqual(refreshed_state["baseline_timestamp"], "2027-01-01T00:00:00Z")
+
+    def test_refresh_keeps_existing_state_when_authorities_fail(self):
+        baseline_time = self.fixed_time("2026-01-01T00:00:00Z")
+        self.write_state(
+            humanity_app.build_initial_state(
+                now=baseline_time,
+                baseline_population=8_000_000_000,
+                source="initial",
+                anchor_year=2026,
+            )
+        )
+
+        with patch.object(humanity_app._pop_module, "get_authoritative_population_anchor", return_value=None):
+            updated = humanity_app.refresh_population_baseline(
+                force=False,
+                now=self.fixed_time("2027-01-01T00:00:05Z"),
+            )
+
+        self.assertFalse(updated)
+        preserved_state = humanity_app.load_state()
+        self.assertEqual(preserved_state["baseline_population"], 8_000_000_000)
+        self.assertEqual(preserved_state["last_anchor_year"], 2026)
 
     def test_live_state_route_returns_authoritative_anchor_contract(self):
         baseline_time = humanity_app.parse_timestamp("2026-03-30T00:00:00Z")
@@ -163,6 +240,8 @@ class PopulationModelTests(unittest.TestCase):
                 now=baseline_time,
                 baseline_population=8_000_000_000,
                 source="test",
+                anchor_year=2026,
+                baseline_timestamp="2026-03-30T00:00:00Z",
             )
         )
 
@@ -174,7 +253,7 @@ class PopulationModelTests(unittest.TestCase):
         live_payload = live_response.get_json()
         self.assertEqual(
             set(live_payload.keys()),
-            {"baselinePopulation", "baselineTimestamp", "birthsPerSecond", "deathsPerSecond", "serverTimestamp", "source"}
+            {"baselinePopulation", "baselineTimestamp", "birthsPerSecond", "deathsPerSecond", "serverTimestamp", "source", "lastAnchorYear"}
         )
         self.assertEqual(live_payload["baselinePopulation"], 8_000_000_000)
         self.assertEqual(live_payload["baselineTimestamp"], "2026-03-30T00:00:00Z")
@@ -182,6 +261,7 @@ class PopulationModelTests(unittest.TestCase):
         self.assertEqual(live_payload["deathsPerSecond"], humanity_app.DEATHS_PER_SEC)
         self.assertEqual(live_payload["serverTimestamp"], "2026-03-30T00:01:00Z")
         self.assertEqual(live_payload["source"], "test")
+        self.assertEqual(live_payload["lastAnchorYear"], 2026)
         self.assertNotIn("population", live_payload)
         self.assertNotIn("births_today", live_payload)
         self.assertNotIn("deaths_today", live_payload)
@@ -193,6 +273,8 @@ class PopulationModelTests(unittest.TestCase):
                 now=baseline_time,
                 baseline_population=8_000_000_000,
                 source="initial",
+                anchor_year=2026,
+                baseline_timestamp="2026-03-30T00:00:00Z",
             )
         )
 
@@ -200,34 +282,44 @@ class PopulationModelTests(unittest.TestCase):
         before_restart = humanity_app.serialize_current_state(
             humanity_app.calculate_current_state(humanity_app.load_state(), now=check_time)
         )
-        humanity_app._CACHE.update({"population": None, "source": None, "ts": 0.0})
+        humanity_app._CACHE.update({"anchor": None, "year": None, "ts": 0.0})
         after_restart = humanity_app.serialize_current_state(
             humanity_app.calculate_current_state(humanity_app.load_state(), now=check_time)
         )
         self.assertEqual(before_restart, after_restart)
 
-    def test_refresh_population_baseline_updates_baseline_not_runtime_counter(self):
+    def test_manual_reanchor_updates_baseline_not_runtime_counter(self):
         baseline_time = humanity_app.parse_timestamp("2026-03-30T00:00:00Z")
         self.write_state(
             humanity_app.build_initial_state(
                 now=baseline_time,
                 baseline_population=8_000_000_000,
                 source="initial",
+                anchor_year=2026,
+                baseline_timestamp="2026-03-30T00:00:00Z",
             )
         )
 
         refresh_time = humanity_app.parse_timestamp("2026-03-30T01:00:00Z")
-        with patch.object(humanity_app, "get_population_cached", return_value=(8_100_000_000, "api_ninjas")):
-            updated = humanity_app.refresh_population_baseline(force=True, now=refresh_time)
+        anchor_bundle = {
+            "population": 8_100_000_000,
+            "births_per_second": 4.4,
+            "deaths_per_second": 1.9,
+            "source": "un_wpp",
+            "anchor_year": 2026,
+            "data_year": 2026,
+        }
+        with patch.object(humanity_app._pop_module, "get_authoritative_population_anchor", return_value=anchor_bundle):
+            updated = humanity_app.refresh_population_baseline(force=True, now=refresh_time, target_year=2026)
 
         self.assertTrue(updated)
         stored_state = humanity_app.load_state()
         self.assertEqual(stored_state["baseline_population"], 8_100_000_000)
-        self.assertEqual(stored_state["baseline_timestamp"], "2026-03-30T01:00:00Z")
-        self.assertEqual(stored_state["births_per_second"], humanity_app.BIRTHS_PER_SEC)
-        self.assertEqual(stored_state["deaths_per_second"], humanity_app.DEATHS_PER_SEC)
-        self.assertEqual(stored_state["source"], "api_ninjas")
-        self.assertFalse(stored_state["refresh_pending"])
+        self.assertEqual(stored_state["baseline_timestamp"], "2026-01-01T00:00:00Z")
+        self.assertEqual(stored_state["births_per_second"], 4.4)
+        self.assertEqual(stored_state["deaths_per_second"], 1.9)
+        self.assertEqual(stored_state["source"], "un_wpp")
+        self.assertEqual(stored_state["last_anchor_year"], 2026)
 
     def test_bootstrap_population_system_starts_updater_when_enabled(self):
         with patch.object(humanity_app, "UPDATER_ENABLED", True), patch.object(humanity_app, "start_updater", return_value=True) as start_mock:
@@ -250,6 +342,8 @@ class PopulationModelTests(unittest.TestCase):
                 now=baseline_time,
                 baseline_population=8_000_000_000,
                 source="test",
+                anchor_year=2026,
+                baseline_timestamp="2026-03-30T00:00:00Z",
             )
         )
 
@@ -261,6 +355,26 @@ class PopulationModelTests(unittest.TestCase):
 
         self.assertTrue(all(status == 200 for status in responses))
         self.assertEqual(limited.status_code, 429)
+
+    def test_admin_reanchor_requires_valid_token(self):
+        anchor_bundle = {
+            "population": 8_100_000_000,
+            "births_per_second": 4.4,
+            "deaths_per_second": 1.9,
+            "source": "un_wpp",
+            "anchor_year": 2026,
+            "data_year": 2026,
+        }
+        with humanity_app.app.test_client() as client, patch.object(humanity_app, "ADMIN_REANCHOR_TOKEN", "secret-token"), patch.object(humanity_app._pop_module, "get_authoritative_population_anchor", return_value=anchor_bundle):
+            forbidden = client.post("/admin/reanchor")
+            allowed = client.post(
+                "/admin/reanchor",
+                headers={"X-Admin-Token": "secret-token"},
+                json={},
+            )
+
+        self.assertEqual(forbidden.status_code, 403)
+        self.assertNotEqual(allowed.status_code, 403)
 
 
 if __name__ == "__main__":

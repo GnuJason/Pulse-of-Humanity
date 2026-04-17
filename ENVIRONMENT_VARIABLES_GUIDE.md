@@ -76,7 +76,7 @@ python security_audit.py
 | `SMTP_USERNAME` | Email account for sending | `your-email@domain.com` |
 | `SMTP_PASSWORD` | App-specific password | `your-app-password` |
 | `RECIPIENT_EMAIL` | Contact form recipient | `contact@yourdomain.com` |
-| `API_NINJAS_KEY` | API Ninjas access key | `your-api-key` |
+| `ADMIN_REANCHOR_TOKEN` | Token for `POST /admin/reanchor` | `long-random-token` |
 
 ### Optional Variables
 
@@ -89,7 +89,9 @@ python security_audit.py
 | `SMTP_SERVER` | `smtp.mailfence.com` | SMTP server |
 | `SMTP_PORT` | `587` | SMTP port |
 | `POP_CACHE_TTL` | `60` | Cache timeout |
-| `RUN_UPDATER` | `0` | Run updater (1/0) |
+| `RUN_UPDATER` | `0` | Run annual anchor checker (1/0) |
+| `POP_ANCHOR_MONTH` | `1` | Annual anchor month |
+| `POP_ANCHOR_DAY` | `1` | Annual anchor day |
 
 ## 🛡️ Security Best Practices
 
@@ -117,10 +119,11 @@ Your app already uses environment variables in these ways:
 ```python
 # Current patterns in your app.py:
 CACHE_TTL = int(os.getenv("POP_CACHE_TTL", "60"))
-API_KEY = os.getenv("API_NINJAS_KEY")
 app.config['SECRET_KEY'] = os.getenv('FLASK_SECRET_KEY', 'your-secret-key-change-in-production')
 DEBUG = os.getenv("FLASK_DEBUG") == "1"
 PORT = int(os.getenv("PORT", "5000"))
+anchor_month = int(os.getenv("POP_ANCHOR_MONTH", "1"))
+anchor_day = int(os.getenv("POP_ANCHOR_DAY", "1"))
 
 # SMTP configuration:
 smtp_server = os.getenv('SMTP_SERVER', 'smtp.mailfence.com')
@@ -143,7 +146,9 @@ heroku config:set FLASK_DEBUG=0
 heroku config:set SMTP_USERNAME=your-email@domain.com
 heroku config:set SMTP_PASSWORD=your-app-password
 heroku config:set RECIPIENT_EMAIL=contact@yourdomain.com
-heroku config:set API_NINJAS_KEY=your-api-key
+heroku config:set POP_ANCHOR_MONTH=1
+heroku config:set POP_ANCHOR_DAY=1
+heroku config:set ADMIN_REANCHOR_TOKEN=your-admin-token
 heroku config:set DOMAIN=yourdomain.com
 ```
 
@@ -157,7 +162,9 @@ environment:
   - SMTP_USERNAME=${SMTP_USERNAME}
   - SMTP_PASSWORD=${SMTP_PASSWORD}
   - RECIPIENT_EMAIL=${RECIPIENT_EMAIL}
-  - API_NINJAS_KEY=${API_NINJAS_KEY}
+    - POP_ANCHOR_MONTH=${POP_ANCHOR_MONTH}
+    - POP_ANCHOR_DAY=${POP_ANCHOR_DAY}
+    - ADMIN_REANCHOR_TOKEN=${ADMIN_REANCHOR_TOKEN}
   - DOMAIN=${DOMAIN}
 ```
 

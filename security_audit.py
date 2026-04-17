@@ -36,8 +36,8 @@ def audit_current_config():
             issues.append("✗ Default secret key placeholder found")
         if 'your-email@domain.com' in content:
             issues.append("✗ Email placeholder values found")
-        if 'your-api-key' in content:
-            issues.append("✗ API key placeholder found")
+        if 'replace-with-a-long-random-token' in content:
+            issues.append("! Admin re-anchor token placeholder found")
             
         if issues:
             print("\\n! Issues found in .env.example:")
@@ -91,12 +91,12 @@ SMTP_USERNAME=your-actual-email@yourdomain.com
 SMTP_PASSWORD=your-actual-app-password
 RECIPIENT_EMAIL=contact@yourdomain.com
 
-# API Configuration (replace with your actual API key)
-API_NINJAS_KEY=your-actual-api-ninjas-key
-
 # Application Settings
 POP_CACHE_TTL=60
 RUN_UPDATER=0
+POP_ANCHOR_MONTH=1
+POP_ANCHOR_DAY=1
+ADMIN_REANCHOR_TOKEN={generate_secure_secret_key()}
 
 # Additional security settings you might want to add:
 # CSRF_SECRET_KEY={generate_secure_secret_key()}
@@ -135,7 +135,8 @@ Environment Variables:
 [ ] SMTP_USERNAME - Real email account for sending
 [ ] SMTP_PASSWORD - App-specific password (not account password)
 [ ] RECIPIENT_EMAIL - Valid email for receiving contact forms
-[ ] API_NINJAS_KEY - Valid API key with sufficient quota
+[ ] POP_ANCHOR_MONTH / POP_ANCHOR_DAY - Annual anchor date configured as intended
+[ ] ADMIN_REANCHOR_TOKEN - Strong token stored securely if admin route is enabled
 [ ] DOMAIN - Production domain name (no http/https prefix)
 
 Monitoring:
@@ -200,7 +201,8 @@ def validate_environment():
         'SMTP_USERNAME', 
         'SMTP_PASSWORD',
         'RECIPIENT_EMAIL',
-        'API_NINJAS_KEY'
+        'POP_ANCHOR_MONTH',
+        'POP_ANCHOR_DAY'
     ]
     
     missing_vars = []

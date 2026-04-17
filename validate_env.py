@@ -14,8 +14,10 @@ def check_environment():
     
     optional_vars = {
         'FLASK_DEBUG': 'Debug mode (should be 0 in production)',
-        'RUN_UPDATER': 'Enable background updates (1 for yes)',
-        'API_NINJAS_KEY': 'API key for population data',
+        'RUN_UPDATER': 'Enable background annual anchor checks (1 for yes)',
+        'POP_ANCHOR_MONTH': 'Anchor month for authoritative yearly baseline (default: 1)',
+        'POP_ANCHOR_DAY': 'Anchor day for authoritative yearly baseline (default: 1)',
+        'ADMIN_REANCHOR_TOKEN': 'Optional admin token for POST /admin/reanchor',
     }
     
     print("🔍 Checking Render deployment environment...")

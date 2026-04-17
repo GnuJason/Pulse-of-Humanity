@@ -10,7 +10,7 @@ Security:
 [ ] .env file is NOT committed to version control
 [ ] Using HTTPS in production
 [ ] Database credentials are secure
-[ ] API keys are valid and have appropriate permissions
+[ ] Annual anchor configuration reviewed and correct for production
 
 Environment Variables:
 ======================
@@ -18,7 +18,8 @@ Environment Variables:
 [ ] SMTP_USERNAME - Real email account for sending
 [ ] SMTP_PASSWORD - App-specific password (not account password)
 [ ] RECIPIENT_EMAIL - Valid email for receiving contact forms
-[ ] API_NINJAS_KEY - Valid API key with sufficient quota
+[ ] POP_ANCHOR_MONTH / POP_ANCHOR_DAY - Annual authoritative re-anchor date configured
+[ ] ADMIN_REANCHOR_TOKEN - Strong token stored securely if admin route is enabled
 [ ] DOMAIN - Production domain name (no http/https prefix)
 
 Monitoring:

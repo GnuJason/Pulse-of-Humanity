@@ -12,18 +12,23 @@ from flask_limiter.util import get_remote_address
 from flask_wtf import CSRFProtect
 
 from population import (
-    BASE_CONTINENTS, BIRTHS_PER_SEC, DEATHS_PER_SEC, NET_PER_SEC,
-    STATE_PATH, STATE_LOCK, STATE_SCHEMA_VERSION,
-    _CACHE, CACHE_TTL, SYNC_INTERVAL_SECONDS,
-    get_population_api, get_population_worldometer, get_population_cached,
-    utc_now, isoformat_z, parse_timestamp, midnight_utc,
-    normalize_named_distribution, build_share_model, canonicalize_share_state,
-    reconcile_integer_distribution, reanchor_continent_shares,
-    build_initial_state, migrate_state, ensure_state_shape,
-    calculate_current_state, serialize_current_state,
-    serialize_live_state_contract, serialize_continent_model,
-    get_authoritative_state, get_live_state_contract,
-    updater_loop, start_updater, current_population_and_today,
+    BASE_CONTINENTS,
+    BIRTHS_PER_SEC,
+    DEATHS_PER_SEC,
+    STATE_PATH,
+    STATE_SCHEMA_VERSION,
+    _CACHE,
+    build_initial_state,
+    calculate_current_state,
+    get_authoritative_state,
+    get_current_state,
+    get_live_state_contract,
+    parse_timestamp,
+    refresh_population_baseline,
+    serialize_continent_model,
+    serialize_current_state,
+    start_updater,
+    utc_now,
 )
 import population as _pop_module
 
@@ -33,7 +38,6 @@ from forms import ContactForm, generate_captcha, send_contact_email
 def _sync_to_pop():
     """Sync app-level references to the population module (supports test patching)."""
     _pop_module.STATE_PATH = STATE_PATH
-    _pop_module.get_population_cached = get_population_cached
 
 
 def load_state():
@@ -51,9 +55,9 @@ def get_current_state(now=None):
     return _pop_module.get_current_state(now=now)
 
 
-def get_authoritative_state():
+def get_authoritative_state(now=None):
     _sync_to_pop()
-    return _pop_module.get_authoritative_state()
+    return _pop_module.get_authoritative_state(now=now)
 
 
 def get_live_state_contract(now=None):
@@ -61,9 +65,9 @@ def get_live_state_contract(now=None):
     return _pop_module.get_live_state_contract(now=now)
 
 
-def refresh_population_baseline(force=False, now=None):
+def refresh_population_baseline(force=False, now=None, target_year=None):
     _sync_to_pop()
-    return _pop_module.refresh_population_baseline(force=force, now=now)
+    return _pop_module.refresh_population_baseline(force=force, now=now, target_year=target_year)
 
 UPDATER_ENABLED = os.getenv("RUN_UPDATER", "0") == "1"
 BOOTSTRAP_LOCK = threading.Lock()
@@ -96,9 +100,9 @@ limiter = Limiter(
     default_limits=["200 per day", "50 per hour"]
 )
 
-API_KEY = os.getenv("API_NINJAS_KEY")
 DEBUG = os.getenv("FLASK_DEBUG") == "1"
 PORT = int(os.getenv("PORT", "10000"))  # Default to 10000 for Render
+ADMIN_REANCHOR_TOKEN = os.getenv("ADMIN_REANCHOR_TOKEN")
 
 @app.before_request
 def force_https():
@@ -183,12 +187,12 @@ def population():
     pop = state["population"]
     src = state["source"]
     ts = datetime.now(timezone.utc).isoformat(timespec="seconds")
-    if src == "api_ninjas":
-        print(f"[{ts}] [INFO] Using API Ninjas data: {pop:,}")
-    elif src == "worldometer":
-        print(f"[{ts}] [INFO] Using Worldometer fallback: {pop:,}")
+    if src == "un_wpp":
+        print(f"[{ts}] [INFO] Using UN WPP annual anchor: {pop:,}")
+    elif src == "world_bank":
+        print(f"[{ts}] [INFO] Using World Bank annual anchor: {pop:,}")
     else:
-        print(f"[{ts}] [WARN] Both sources failed — using hardcoded fallback: {pop:,}")
+        print(f"[{ts}] [WARN] Using hardcoded fallback anchor: {pop:,}")
     return jsonify({"population": pop, "source": src, "cached": True, "last_updated": state["last_updated"]})
 
 
@@ -196,6 +200,35 @@ def population():
 @limiter.limit(LIVE_STATE_LIMIT, override_defaults=True)
 def live_state():
     return jsonify(get_live_state_contract())
+
+
+@app.route("/admin/reanchor", methods=["POST"])
+@csrf.exempt
+@limiter.limit("10 per hour")
+def admin_reanchor():
+    if not ADMIN_REANCHOR_TOKEN:
+        return jsonify({"error": "admin re-anchor token not configured"}), 503
+
+    provided_token = request.headers.get("X-Admin-Token")
+    if not provided_token or not secrets.compare_digest(provided_token, ADMIN_REANCHOR_TOKEN):
+        return jsonify({"error": "forbidden"}), 403
+
+    payload = request.get_json(silent=True) or {}
+    target_year = payload.get("year")
+    if target_year is not None:
+        try:
+            target_year = int(target_year)
+        except (TypeError, ValueError):
+            return jsonify({"error": "year must be an integer"}), 400
+
+    refreshed = refresh_population_baseline(force=True, now=utc_now(), target_year=target_year)
+    if not refreshed:
+        return jsonify({"error": "re-anchor failed", "liveState": get_live_state_contract()}), 502
+
+    return jsonify({
+        "status": "ok",
+        "liveState": get_live_state_contract(),
+    })
 
 @app.route("/contact", methods=["GET", "POST"])
 @limiter.limit("5 per hour")  # Rate limit for contact form
@@ -341,8 +374,8 @@ def sitemap_xml():
 
 if __name__ == "__main__":
     if bootstrap_population_system():
-        print("[INFO] Started updater loop (RUN_UPDATER=1)")
+        print("[INFO] Started annual anchor watcher (RUN_UPDATER=1)")
     else:
-        print("[INFO] Skipping updater loop (RUN_UPDATER not set to 1 or already running)")
+        print("[INFO] Skipping annual anchor watcher (RUN_UPDATER not set to 1 or already running)")
 
     app.run(host="0.0.0.0", port=PORT, debug=DEBUG)

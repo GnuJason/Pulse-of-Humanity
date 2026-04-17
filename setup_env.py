@@ -106,17 +106,15 @@ def create_env_file():
     smtp_password = get_user_input("SMTP password (app-specific password recommended)")
     recipient_email = get_user_input("Recipient email (for contact form)", validator=validate_email)
     
-    print("\\nAPI Configuration:")
-    print("-" * 17)
-    
-    api_ninjas_key = get_user_input("API Ninjas key")
-    
     print("\\nApplication Settings:")
     print("-" * 20)
     
     cache_ttl = get_user_input("Cache TTL (seconds)", "60", validator=lambda x: x.isdigit())
     run_updater = get_user_input("Run updater? (y/N)", "0")
     run_updater = "1" if run_updater.lower() in ('y', 'yes', '1') else "0"
+    anchor_month = get_user_input("Anchor month", "1", validator=lambda x: x.isdigit() and 1 <= int(x) <= 12)
+    anchor_day = get_user_input("Anchor day", "1", validator=lambda x: x.isdigit() and 1 <= int(x) <= 31)
+    admin_reanchor_token = get_user_input("Admin re-anchor token", secrets.token_hex(16), required=False)
     
     # Create .env content
     env_content = f"""# Flask Configuration
@@ -135,12 +133,12 @@ SMTP_USERNAME={smtp_username}
 SMTP_PASSWORD={smtp_password}
 RECIPIENT_EMAIL={recipient_email}
 
-# API Configuration
-API_NINJAS_KEY={api_ninjas_key}
-
 # Application Settings
 POP_CACHE_TTL={cache_ttl}
 RUN_UPDATER={run_updater}
+POP_ANCHOR_MONTH={anchor_month}
+POP_ANCHOR_DAY={anchor_day}
+ADMIN_REANCHOR_TOKEN={admin_reanchor_token}
 
 # Generated on {__import__('datetime').datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
 # Remember: Never commit this file to version control!
@@ -180,9 +178,11 @@ def show_current_config():
         ('SMTP_USERNAME', False),
         ('SMTP_PASSWORD', True),
         ('RECIPIENT_EMAIL', False),
-        ('API_NINJAS_KEY', True),
         ('POP_CACHE_TTL', False),
         ('RUN_UPDATER', False),
+        ('POP_ANCHOR_MONTH', False),
+        ('POP_ANCHOR_DAY', False),
+        ('ADMIN_REANCHOR_TOKEN', True),
     ]
     
     for var_name, is_secret in vars_to_check:

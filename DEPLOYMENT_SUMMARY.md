@@ -68,7 +68,9 @@ pulse-of-humanity/
 2. Set environment variables:
    - `FLASK_SECRET_KEY`: Generate secure key
    - `RUN_UPDATER`: Set to `1`
-   - `API_NINJAS_KEY`: (Optional) Your API key
+   - `POP_ANCHOR_MONTH`: Usually `1`
+   - `POP_ANCHOR_DAY`: Usually `1`
+   - `ADMIN_REANCHOR_TOKEN`: Optional secure token for manual re-anchor
 3. Deploy using render.yaml configuration
 
 ### Environment Variables to Set in Render:
@@ -76,7 +78,9 @@ pulse-of-humanity/
 FLASK_DEBUG=0
 FLASK_SECRET_KEY=<generate-64-char-hex-key>
 RUN_UPDATER=1
-API_NINJAS_KEY=<your-api-key>
+POP_ANCHOR_MONTH=1
+POP_ANCHOR_DAY=1
+ADMIN_REANCHOR_TOKEN=<generate-secure-token>
 PORT=10000
 ```
 

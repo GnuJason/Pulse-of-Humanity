@@ -9,7 +9,13 @@ services:
         value: "0"
       - key: RUN_UPDATER
         value: "1"
+      - key: POP_ANCHOR_MONTH
+        value: "1"
+      - key: POP_ANCHOR_DAY
+        value: "1"
       - key: FLASK_SECRET_KEY
+        generateValue: true
+      - key: ADMIN_REANCHOR_TOKEN
         generateValue: true
       - key: PORT
         value: "10000"
