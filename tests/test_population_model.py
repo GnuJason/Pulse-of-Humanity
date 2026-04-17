@@ -192,7 +192,7 @@ class PopulationModelTests(unittest.TestCase):
         live_payload = live_response.get_json()
         self.assertEqual(
             set(live_payload.keys()),
-            {"baselinePopulation", "baselineTimestamp", "birthsPerSecond", "deathsPerSecond", "serverTimestamp", "source", "lastAnchorYear"}
+            {"baselinePopulation", "baselineTimestamp", "birthsPerSecond", "deathsPerSecond", "serverTimestamp", "source", "lastAnchorYear", "continents"}
         )
         self.assertEqual(live_payload["baselinePopulation"], 8_130_371_000)
         self.assertEqual(live_payload["baselineTimestamp"], "2026-01-01T00:00:00Z")
@@ -201,9 +201,39 @@ class PopulationModelTests(unittest.TestCase):
         self.assertEqual(live_payload["serverTimestamp"], "2026-03-30T00:01:00Z")
         self.assertEqual(live_payload["source"], "UN WPP 2024 Medium Variant (static)")
         self.assertEqual(live_payload["lastAnchorYear"], 2026)
+        self.assertEqual(set(live_payload["continents"].keys()), set(humanity_app.BASE_CONTINENTS.keys()))
         self.assertNotIn("population", live_payload)
         self.assertNotIn("births_today", live_payload)
         self.assertNotIn("deaths_today", live_payload)
+
+    def test_live_state_continent_values_are_numeric_and_proportional(self):
+        with humanity_app.app.test_client() as client:
+            with patch.object(humanity_app._pop_module, "utc_now", return_value=humanity_app.parse_timestamp("2026-03-30T00:01:00Z")):
+                live_payload = client.get("/api/live-state").get_json()
+
+        continents = live_payload["continents"]
+        africa = continents["Africa"]
+        current_population = sum(continent["population"] for continent in continents.values())
+        self.assertIsInstance(africa["population"], int)
+        self.assertIsInstance(africa["birthsPerSecond"], float)
+        self.assertIsInstance(africa["deathsPerSecond"], float)
+        self.assertIsInstance(africa["birthsToday"], int)
+        self.assertIsInstance(africa["deathsToday"], int)
+
+        expected_births = (africa["population"] / current_population) * live_payload["birthsPerSecond"]
+        expected_deaths = (africa["population"] / current_population) * live_payload["deathsPerSecond"]
+        self.assertAlmostEqual(africa["birthsPerSecond"], expected_births, places=6)
+        self.assertAlmostEqual(africa["deathsPerSecond"], expected_deaths, places=6)
+        self.assertAlmostEqual(
+            sum(continent["birthsPerSecond"] for continent in continents.values()),
+            live_payload["birthsPerSecond"],
+            places=6,
+        )
+        self.assertAlmostEqual(
+            sum(continent["deathsPerSecond"] for continent in continents.values()),
+            live_payload["deathsPerSecond"],
+            places=6,
+        )
 
     def test_index_route_renders_successfully(self):
         with humanity_app.app.test_client() as client:

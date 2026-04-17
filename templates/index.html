@@ -200,8 +200,8 @@
       tooltip.innerHTML =
         '<strong>' + regionId.replace(/_/g, " ") + '</strong><br>' +
         'Pop: ' + fmt(Math.floor(c.population)) + '<br>' +
-        'Births today: ' + fmt(Math.floor(c.births_today)) + '<br>' +
-        'Deaths today: ' + fmt(Math.floor(c.deaths_today));
+        'Births today: ' + fmt(Math.floor(c.birthsToday)) + '<br>' +
+        'Deaths today: ' + fmt(Math.floor(c.deathsToday));
     }
 
     function showTooltip(e, regionId) {

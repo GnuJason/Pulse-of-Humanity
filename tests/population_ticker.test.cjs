@@ -76,6 +76,30 @@ test('computeContinentState is deterministic across clients given the same ancho
   );
 });
 
+test('computeContinentState returns numeric proportional values for continent models', () => {
+  const anchor = ticker.normalizeAnchor({
+    baselinePopulation: 8130371000,
+    baselineTimestamp: '2026-01-01T00:00:00Z',
+    birthsPerSecond: 4.28,
+    deathsPerSecond: 2.06,
+    serverTimestamp: '2026-03-30T00:00:00Z',
+    source: 'UN WPP 2024 Medium Variant (static)',
+  }, 0);
+
+  const continent = ticker.computeContinentState(anchor, {
+    baselineShare: 0.2,
+    population: 1626074200,
+    birthsPerSecond: 0.856,
+    deathsPerSecond: 0.412,
+  }, Date.parse('2026-03-30T12:00:00Z'));
+
+  assert.equal(Number.isFinite(continent.population), true);
+  assert.equal(Number.isFinite(continent.birthsToday), true);
+  assert.equal(Number.isFinite(continent.deathsToday), true);
+  assert.equal(Number.isFinite(continent.birthsPerSecond), true);
+  assert.equal(Number.isFinite(continent.deathsPerSecond), true);
+});
+
 test('computeClockOffset uses the request midpoint to reduce network skew', () => {
   const offset = ticker.computeClockOffset(new Date(20010).toISOString(), 20020, 20060);
 

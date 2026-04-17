@@ -345,13 +345,14 @@ def calculate_current_state(state, now=None):
 
     for name in BASE_CONTINENTS:
         continent_state = state["continents"][name]
-        births_per_sec = continent_state["birth_share"] * births_per_second
-        deaths_per_sec = continent_state["death_share"] * deaths_per_second
         baseline_continent_population = continent_state["baseline_share"] * baseline_population
+        share = 0.0 if baseline_population <= 0 else (baseline_continent_population / baseline_population)
+        births_per_sec = share * births_per_second
+        deaths_per_sec = share * deaths_per_second
         current_state["continents"][name] = {
             "population": max(0.0, baseline_continent_population + ((births_per_sec - deaths_per_sec) * elapsed_seconds)),
-            "births_today": continent_state["birth_share"] * births_today,
-            "deaths_today": continent_state["death_share"] * deaths_today,
+            "births_today": births_per_sec * seconds_today,
+            "deaths_today": deaths_per_sec * seconds_today,
             "births_per_sec": births_per_sec,
             "deaths_per_sec": deaths_per_sec,
         }
@@ -401,6 +402,7 @@ def serialize_current_state(current_state):
 
 def serialize_live_state_contract(state, now=None):
     now = now or utc_now()
+    current_state = serialize_current_state(calculate_current_state(state, now=now))
     return {
         "baselinePopulation": int(state["baseline_population"]),
         "baselineTimestamp": state["baseline_timestamp"],
@@ -409,19 +411,29 @@ def serialize_live_state_contract(state, now=None):
         "serverTimestamp": isoformat_z(now),
         "source": state.get("source", STATIC_ANCHOR["source"]),
         "lastAnchorYear": int(state.get("last_anchor_year", STATIC_ANCHOR["last_anchor_year"])),
+        "continents": {
+            name: {
+                "population": int(data["population"]),
+                "birthsPerSecond": float(data["births_per_sec"]),
+                "deathsPerSecond": float(data["deaths_per_sec"]),
+                "birthsToday": int(data["births_today"]),
+                "deathsToday": int(data["deaths_today"]),
+            }
+            for name, data in current_state["continents"].items()
+        },
     }
 
 
 def serialize_continent_model(state):
+    baseline_population = float(state.get("baseline_population", STATIC_ANCHOR["baseline_population"]))
     births_per_second = float(state.get("births_per_second", BIRTHS_PER_SEC))
     deaths_per_second = float(state.get("deaths_per_second", DEATHS_PER_SEC))
     return {
         name: {
             "baselineShare": continent_state["baseline_share"],
-            "birthShare": continent_state["birth_share"],
-            "deathShare": continent_state["death_share"],
-            "birthsPerSecond": continent_state["birth_share"] * births_per_second,
-            "deathsPerSecond": continent_state["death_share"] * deaths_per_second,
+            "population": int(continent_state["baseline_share"] * baseline_population),
+            "birthsPerSecond": continent_state["baseline_share"] * births_per_second,
+            "deathsPerSecond": continent_state["baseline_share"] * deaths_per_second,
         }
         for name, continent_state in state["continents"].items()
     }

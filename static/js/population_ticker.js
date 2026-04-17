@@ -68,13 +68,21 @@
   function computeContinentState(anchor, continentModel, authoritativeNowMs) {
     var elapsedSeconds = getElapsedSeconds(anchor, authoritativeNowMs);
     var secondsToday = getSecondsSinceUtcMidnight(authoritativeNowMs);
-    var birthsPerSecond = Number(continentModel.birthShare) * anchor.birthsPerSecond;
-    var deathsPerSecond = Number(continentModel.deathShare) * anchor.deathsPerSecond;
+    var baselineShare = Number(continentModel.baselineShare);
+    var birthsPerSecond = Number.isFinite(Number(continentModel.birthsPerSecond))
+      ? Number(continentModel.birthsPerSecond)
+      : baselineShare * anchor.birthsPerSecond;
+    var deathsPerSecond = Number.isFinite(Number(continentModel.deathsPerSecond))
+      ? Number(continentModel.deathsPerSecond)
+      : baselineShare * anchor.deathsPerSecond;
+    var baselinePopulation = Number.isFinite(Number(continentModel.population))
+      ? Number(continentModel.population)
+      : baselineShare * anchor.baselinePopulation;
 
     return {
-      population: (Number(continentModel.baselineShare) * anchor.baselinePopulation) + ((birthsPerSecond - deathsPerSecond) * elapsedSeconds),
-      birthsToday: Number(continentModel.birthShare) * anchor.birthsPerSecond * secondsToday,
-      deathsToday: Number(continentModel.deathShare) * anchor.deathsPerSecond * secondsToday,
+      population: baselinePopulation + ((birthsPerSecond - deathsPerSecond) * elapsedSeconds),
+      birthsToday: birthsPerSecond * secondsToday,
+      deathsToday: deathsPerSecond * secondsToday,
       birthsPerSecond: birthsPerSecond,
       deathsPerSecond: deathsPerSecond,
     };
