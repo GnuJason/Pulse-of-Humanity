@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Pulse of Humanity — Screensaver Test Harness</title>
+  <meta name="color-scheme" content="dark" />
+  <link rel="stylesheet" href="styles/screensaver.css" />
+</head>
+<body>
+  <main class="ss-stage" aria-label="Pulse of Humanity screensaver harness">
+    <div id="ss-map"></div>
+    <div class="ss-vignette-overlay" aria-hidden="true"></div>
+    <div id="ss-counter-host"></div>
+    <div id="ss-panel-host"></div>
+  </main>
+
+  <aside class="ss-dev" aria-label="Dev controls">
+    <h2>Harness</h2>
+    <div class="row"><span>FPS:</span> <span class="fps" id="dev-fps">--</span></div>
+
+    <label for="dev-warp">Time warp</label>
+    <select id="dev-warp">
+      <option value="1">1× (real time)</option>
+      <option value="60">60×</option>
+      <option value="3600">3 600× (1 sec = 1 hr)</option>
+      <option value="86400">86 400× (1 sec = 1 day)</option>
+    </select>
+
+    <label for="dev-hover">Force hover continent</label>
+    <select id="dev-hover">
+      <option value="">(none)</option>
+      <option value="Africa">Africa</option>
+      <option value="Asia">Asia</option>
+      <option value="Europe">Europe</option>
+      <option value="North_America">North America</option>
+      <option value="South_America">South America</option>
+      <option value="Oceania">Oceania</option>
+      <option value="Antarctica">Antarctica</option>
+    </select>
+
+    <label><input type="checkbox" id="dev-reduced" /> Force reduced motion</label>
+
+    <button id="dev-snapshot">Console snapshot</button>
+  </aside>
+
+  <script src="vendor/topojson-client.min.js"></script>
+  <script src="assets/world-110m.js"></script>
+
+  <script type="module">
+    import { start } from "./src/main.js";
+    import { setReducedMotion } from "./src/motion.js";
+    import { worldNow, allContinentsNow, dailyCounts } from "./src/simulation.js";
+
+    // Time-warp: anchor wall clock at boot, then advance scaled time.
+    const T0_REAL = Date.now();
+    const T0_PERF = performance.now();
+    let warp = 1;
+
+    function timeProvider() {
+      const elapsedReal = performance.now() - T0_PERF;
+      return T0_REAL + elapsedReal * warp;
+    }
+
+    // FPS meter
+    const fpsEl = document.getElementById("dev-fps");
+    let frames = 0, fpsAcc = 0, fpsLast = performance.now();
+    function fpsTick(now) {
+      frames++;
+      fpsAcc += now - fpsLast;
+      fpsLast = now;
+      if (fpsAcc >= 1000) {
+        fpsEl.textContent = (frames * 1000 / fpsAcc).toFixed(1);
+        frames = 0; fpsAcc = 0;
+      }
+      requestAnimationFrame(fpsTick);
+    }
+    requestAnimationFrame(fpsTick);
+
+    start({ timeProvider }).then((api) => {
+      document.getElementById("dev-warp").addEventListener("change", (e) => {
+        warp = Number(e.target.value);
+      });
+      document.getElementById("dev-hover").addEventListener("change", (e) => {
+        api.hover.activateByKey(e.target.value || null);
+      });
+      document.getElementById("dev-reduced").addEventListener("change", (e) => {
+        setReducedMotion(e.target.checked);
+      });
+      document.getElementById("dev-snapshot").addEventListener("click", () => {
+        const t = timeProvider();
+        // eslint-disable-next-line no-console
+        console.log("[snapshot]", new Date(t).toISOString(), {
+          world: worldNow(t),
+          daily: dailyCounts(t),
+          continents: allContinentsNow(t),
+        });
+      });
+    }).catch((e) => console.error(e));
+  </script>
+</body>
+</html>

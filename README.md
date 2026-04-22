@@ -25,6 +25,14 @@
 
 ---
 
+## Cinematic Earth Screensaver (v2.0.0)
+
+- Live demo: [/screensaver](https://pulseofhumanity.org/screensaver)
+- Download: [/static/screensaver.zip](https://pulseofhumanity.org/static/screensaver.zip)
+- Fully offline, deterministic, and standalone
+
+---
+
 ## Features
 
 - **Real-time Population Counter** — live-updating display driven by a deterministic annual demographic anchor

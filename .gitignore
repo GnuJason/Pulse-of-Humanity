@@ -229,6 +229,7 @@ node_modules/
 
 # Project-specific files
 *.zip
+!static/screensaver.zip
 *.tar.gz
 state.json
 test_*.py

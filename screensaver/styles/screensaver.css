@@ -1,0 +1,325 @@
+/* screensaver.css — cinematic, minimal, GPU-friendly.
+   All visual styling for the Pulse of Humanity Screensaver.
+   No external font files; uses system fine-weight stacks (Inter SF Pro / fallback).
+*/
+
+:root {
+  /* Core palette */
+  --ss-bg-deep: #02040a;
+  --ss-text: rgba(242, 240, 234, 0.96);
+  --ss-text-muted: rgba(242, 240, 234, 0.68);
+  --ss-text-faint: rgba(242, 240, 234, 0.38);
+
+  /* Panel / glass */
+  --ss-panel-bg: rgba(10, 14, 22, 0.48);
+  --ss-panel-border: rgba(255, 255, 255, 0.08);
+  --ss-panel-highlight: rgba(255, 255, 255, 0.06);
+
+  /* Luminous accents */
+  --ss-glow-warm: rgba(255, 247, 224, 0.35);
+
+  /* Legibility shadow stack — tight dark halo + wide ambient bloom.
+     Applied to any overlay text to survive pale continents underneath. */
+  --ss-legibility-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.75),
+    0 2px 14px rgba(0, 0, 0, 0.55),
+    0 8px 36px rgba(0, 0, 0, 0.40);
+
+  /* Hero counter glow (luminous, not boxed). */
+  --ss-hero-glow:
+    drop-shadow(0 0 18px rgba(255, 247, 224, 0.18))
+    drop-shadow(0 0 48px rgba(190, 210, 240, 0.12))
+    drop-shadow(0 2px 2px rgba(0, 0, 0, 0.55));
+
+  /* Motion tokens */
+  --ss-ease-out: cubic-bezier(.22, .61, .36, 1);
+  --ss-ease-smooth: cubic-bezier(.4, .0, .2, 1);
+  --ss-dur-hover: 180ms;
+  --ss-dur-panel: 220ms;
+
+  /* Typography */
+  --ss-font-display:
+    "Inter", "SF Pro Display", "Helvetica Neue", system-ui, -apple-system, sans-serif;
+  --ss-font-mono:
+    ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  background: var(--ss-bg-deep);
+  color: var(--ss-text);
+  font-family: var(--ss-font-display);
+  font-weight: 300;
+  letter-spacing: 0.005em;
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  cursor: default;
+}
+
+/* ----- Stage layout ------------------------------------------------------ */
+.ss-stage {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  grid-template-rows: 1fr;
+}
+
+#ss-map { position: absolute; inset: 0; }
+.ss-map { display: block; width: 100%; height: 100%; }
+
+/* Map graticule */
+.ss-graticule path {
+  fill: none;
+  stroke: rgba(242, 240, 234, 0.035);
+  stroke-width: 0.5;
+  vector-effect: non-scaling-stroke;
+  pointer-events: none;
+}
+
+/* Land — base */
+.ss-country {
+  transition: fill 220ms var(--ss-ease-smooth), opacity 220ms var(--ss-ease-smooth);
+  cursor: crosshair;
+}
+
+/* Hover clones: overlay the active continent with inner glow.
+   Opacity-animated so the glow ramps in rather than hard-swaps. */
+.ss-hover-layer .ss-country--active {
+  pointer-events: none;
+  mix-blend-mode: screen;
+  opacity: 0;
+  animation: ss-glow-in var(--ss-dur-hover) var(--ss-ease-out) forwards;
+}
+@keyframes ss-glow-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+/* Vignette overlay: smooth 4-stop radial + faint deterministic grain to kill banding.
+   The grain is an inline SVG data-URI (feTurbulence, fixed seed → deterministic).
+   Normal blend, low opacity — darkens edges without crushing the scene. */
+.ss-vignette-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 2;
+  background:
+    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' seed='11' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.04 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>"),
+    radial-gradient(ellipse 115% 110% at 50% 52%,
+      rgba(0, 0, 0, 0) 0%,
+      rgba(0, 0, 0, 0) 55%,
+      rgba(0, 0, 0, 0.20) 78%,
+      rgba(0, 0, 0, 0.45) 92%,
+      rgba(0, 0, 0, 0.65) 100%);
+  background-size: 160px 160px, 100% 100%;
+}
+
+/* ----- Top floating counter --------------------------------------------- */
+.ss-counter {
+  position: absolute;
+  top: clamp(20px, 4.2vh, 60px);
+  left: 50%;
+  transform: translateX(-50%);
+  text-align: center;
+  pointer-events: none;
+  z-index: 5;
+  padding: 14px 28px 18px;
+  width: min(92vw, 1100px);
+}
+/* Soft backdrop-blur strip behind the counter, invisible on ocean but rescues
+   contrast when pale land scrolls beneath the text. Single radial mask so it
+   fades smoothly to zero in every direction — no visible halo. */
+.ss-counter::before {
+  content: "";
+  position: absolute;
+  inset: -4px -16px -8px;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  -webkit-mask-image:
+    radial-gradient(ellipse 85% 70% at 50% 50%,
+      rgba(0,0,0,0.85) 0%,
+      rgba(0,0,0,0.55) 55%,
+      rgba(0,0,0,0) 100%);
+          mask-image:
+    radial-gradient(ellipse 85% 70% at 50% 50%,
+      rgba(0,0,0,0.85) 0%,
+      rgba(0,0,0,0.55) 55%,
+      rgba(0,0,0,0) 100%);
+  z-index: -1;
+  pointer-events: none;
+}
+.ss-counter__label {
+  font-size: 11.5px;
+  font-weight: 400;
+  letter-spacing: 0.32em;
+  text-transform: uppercase;
+  color: var(--ss-text-faint);
+  margin-bottom: 10px;
+  text-shadow: var(--ss-legibility-shadow);
+}
+.ss-counter__total {
+  font-family: var(--ss-font-display);
+  font-weight: 200;
+  font-size: clamp(44px, 6.4vw, 96px);
+  line-height: 1;
+  letter-spacing: -0.018em;
+  color: var(--ss-text);
+  font-variant-numeric: tabular-nums;
+  filter: var(--ss-hero-glow);
+  /* No transform-origin / no breath — keeps numerals sharp. */
+}
+.ss-counter__metrics {
+  margin-top: 14px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 6px 18px;
+  font-size: 14px;
+  font-weight: 400;
+  color: var(--ss-text-muted);
+  text-shadow: var(--ss-legibility-shadow);
+}
+.ss-counter__metric {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+.ss-counter__icon { display: inline-flex; opacity: 0.9; }
+.ss-counter__num {
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+  letter-spacing: 0.002em;
+}
+.ss-counter__sub { color: var(--ss-text-faint); font-weight: 400; }
+.ss-counter__sep {
+  color: var(--ss-text-faint);
+  padding: 0 2px;
+  opacity: 0.5;
+}
+
+/* Tick "pop" for births/deaths — gentler. */
+@keyframes ss-pop {
+  0%   { transform: scale(1); }
+  40%  { transform: scale(1.06); }
+  100% { transform: scale(1); }
+}
+.ss-pop {
+  animation: ss-pop 260ms var(--ss-ease-out);
+  display: inline-block;
+}
+
+/* ----- Hover panel ------------------------------------------------------- */
+#ss-panel-host {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 6;
+}
+.ss-panel {
+  position: absolute;
+  top: 0; left: 0;
+  min-width: 220px;
+  padding: 16px 18px 14px;
+  border-radius: 16px;
+  background: var(--ss-panel-bg);
+  border: 1px solid var(--ss-panel-border);
+  backdrop-filter: blur(22px) saturate(160%) brightness(1.05);
+  -webkit-backdrop-filter: blur(22px) saturate(160%) brightness(1.05);
+  box-shadow:
+    0 24px 64px -24px rgba(0, 0, 0, 0.75),
+    0 2px 6px rgba(0, 0, 0, 0.25),
+    inset 0 1px 0 var(--ss-panel-highlight);
+  transition: opacity var(--ss-dur-panel) var(--ss-ease-out),
+              transform 100ms linear;
+  will-change: transform, opacity;
+  font-feature-settings: "ss01", "tnum";
+}
+.ss-panel__title {
+  font-size: 11px;
+  letter-spacing: 0.26em;
+  text-transform: uppercase;
+  color: var(--ss-text-faint);
+  margin-bottom: 8px;
+  font-weight: 500;
+}
+.ss-panel__pop {
+  font-size: 24px;
+  font-weight: 300;
+  letter-spacing: -0.012em;
+  color: var(--ss-text);
+  margin-bottom: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  font-variant-numeric: tabular-nums;
+}
+.ss-panel__rows { display: grid; gap: 6px; }
+.ss-panel__row {
+  display: grid;
+  grid-template-columns: 20px 1fr auto;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  font-weight: 400;
+}
+.ss-panel__icon { display: inline-flex; }
+.ss-panel__label { color: var(--ss-text-muted); }
+.ss-panel__val   {
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+  letter-spacing: 0.003em;
+}
+
+/* ----- Reduced motion ---------------------------------------------------- */
+@media (prefers-reduced-motion: reduce) {
+  .ss-pop { animation: none; }
+  .ss-counter__total { transform: none !important; filter: none; }
+  .ss-country { transition: none; }
+  .ss-panel   { transition: opacity 80ms linear; }
+  .ss-hover-layer .ss-country--active { animation: none; opacity: 1; }
+}
+
+/* ----- Harness-only overlay (loaded only in test-harness.html) ---------- */
+.ss-dev {
+  position: fixed;
+  top: 12px;
+  right: 12px;
+  z-index: 100;
+  background: rgba(10, 14, 20, 0.78);
+  color: var(--ss-text);
+  border: 1px solid var(--ss-panel-border);
+  border-radius: 10px;
+  padding: 12px 14px;
+  font-family: var(--ss-font-mono);
+  font-size: 12px;
+  min-width: 240px;
+  pointer-events: auto;
+  backdrop-filter: blur(10px);
+}
+.ss-dev h2 {
+  margin: 0 0 8px;
+  font-size: 11px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--ss-text-faint);
+  font-weight: 400;
+}
+.ss-dev label { display: block; margin: 6px 0 2px; color: var(--ss-text-muted); }
+.ss-dev select, .ss-dev input, .ss-dev button {
+  width: 100%;
+  background: rgba(255,255,255,0.04);
+  color: var(--ss-text);
+  border: 1px solid var(--ss-panel-border);
+  border-radius: 6px;
+  padding: 4px 6px;
+  font: inherit;
+}
+.ss-dev button { cursor: pointer; margin-top: 6px; }
+.ss-dev .row { display: flex; gap: 6px; align-items: center; margin-top: 4px; }
+.ss-dev .fps { color: #b6c5ad; font-weight: 400; }

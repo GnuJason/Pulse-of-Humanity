@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 
 from flask import (
     Flask, jsonify, render_template, make_response,
-    request, flash, redirect, session,
+    request, flash, redirect, session, send_from_directory,
 )
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
@@ -309,6 +309,20 @@ def about():
 @app.route("/privacy")
 def privacy():
     return render_template("privacy.html")
+
+
+@app.route("/screensaver")
+def screensaver_landing():
+    """Landing page for the Cinematic Earth Screensaver."""
+    return render_template("screensaver.html")
+
+
+@app.route("/screensaver/<path:path>")
+def screensaver_static(path):
+    """Serve the self-contained screensaver bundle from /screensaver/*."""
+    return send_from_directory(
+        os.path.join(app.root_path, "screensaver"), path
+    )
 
 @app.route("/robots.txt")
 def robots_txt():
