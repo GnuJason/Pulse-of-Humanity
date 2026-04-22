@@ -1,6 +1,7 @@
 import os
 import secrets
 import threading
+import time
 from datetime import datetime, timezone
 
 from flask import (
@@ -72,6 +73,7 @@ def refresh_population_baseline(force=False, now=None, target_year=None):
 
 UPDATER_ENABLED = os.getenv("RUN_UPDATER", "0") == "1"
 BOOTSTRAP_LOCK = threading.Lock()
+BUILD_ID = str(int(time.time()))
 
 
 def bootstrap_population_system():
@@ -84,6 +86,11 @@ def bootstrap_population_system():
         return start_updater()
 
 app = Flask(__name__)
+
+
+@app.context_processor
+def inject_build_id():
+    return {"build_id": BUILD_ID}
 
 # Configuration
 secret_key = os.getenv('FLASK_SECRET_KEY')

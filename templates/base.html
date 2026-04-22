@@ -196,6 +196,18 @@
     var yearEl = document.getElementById('current-year');
     if (yearEl) yearEl.textContent = new Date().getFullYear();
   </script>
+  <script>
+    (function() {
+      const BUILD = "{{ build_id }}";
+      const last = localStorage.getItem("poh_build");
+      if (last && last !== BUILD) {
+        localStorage.setItem("poh_build", BUILD);
+        window.location.reload(true);
+        return;
+      }
+      localStorage.setItem("poh_build", BUILD);
+    })();
+  </script>
   {% block scripts %}{% endblock %}
 </body>
 </html>
