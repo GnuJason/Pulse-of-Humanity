@@ -140,13 +140,7 @@ def add_security_headers(resp):
     resp.headers["X-Frame-Options"] = "DENY"
     resp.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
     resp.headers["Strict-Transport-Security"] = "max-age=63072000; includeSubDomains; preload"
-    
-    # Prevent browser caching for dynamic content
-    if request.endpoint in ['index', 'population']:
-        resp.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
-        resp.headers["Pragma"] = "no-cache"
-        resp.headers["Expires"] = "0"
-    
+
     return resp
 
 LIVE_STATE_LIMIT = "120 per minute; 5000 per hour"
@@ -381,6 +375,15 @@ def sitemap_xml():
     response = make_response(sitemap_content)
     response.headers['Content-Type'] = 'application/xml'
     return response
+
+
+@app.after_request
+def add_no_cache_headers(response):
+    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
+    return response
+
 
 if __name__ == "__main__":
     if bootstrap_population_system():
