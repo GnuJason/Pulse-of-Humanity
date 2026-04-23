@@ -153,34 +153,7 @@ LIVE_STATE_LIMIT = "120 per minute; 5000 per hour"
 
 @app.route("/")
 def index():
-    try:
-        current_state = serialize_current_state(get_current_state())
-        authoritative_state = get_authoritative_state()
-        return render_template(
-            'index.html',
-            population=current_state["population"],
-            births_today=current_state["births_today"],
-            deaths_today=current_state["deaths_today"],
-            last_updated=current_state["last_updated"],
-            live_anchor=serialize_live_state_contract(authoritative_state),
-            continents_model_json=serialize_continent_model(authoritative_state)
-        )
-    except Exception as e:
-        print(f"[ERROR] Index route failed: {e}")
-        fallback_state = build_initial_state(
-            now=utc_now(),
-            baseline_population=8_000_000_000,
-            source="fallback"
-        )
-        return render_template(
-            'index.html',
-            population=8000000000,
-            births_today=372000,
-            deaths_today=155000,
-            last_updated="Fallback data - service initializing",
-            live_anchor=serialize_live_state_contract(fallback_state),
-            continents_model_json=serialize_continent_model(fallback_state)
-        )
+    return redirect("/screensaver/index.html", code=302)
 
 @app.route("/population")
 def population():
