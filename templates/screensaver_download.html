@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Pulse of Humanity Screensaver</title>
+  <meta name="description" content="Download the Pulse of Humanity cinematic screensaver for Windows, macOS, or as an offline ZIP bundle.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/screensaver-download.css') }}?v={{ build_id }}">
+</head>
+<body data-detected-os="unknown">
+  <div class="download-shell">
+    <div class="aurora aurora-left"></div>
+    <div class="aurora aurora-right"></div>
+
+    <main class="download-page">
+      <section class="hero-panel">
+        <div class="eyebrow-row">
+          <span class="eyebrow">Pulse of Humanity</span>
+          <span class="version-chip">{{ version.tag }} {{ version.name }}</span>
+        </div>
+
+        <div class="hero-copy">
+          <p class="kicker">Cinematic Earth release</p>
+          <h1>Bring the living world map to your idle screen.</h1>
+          <p class="lede">
+            An offline screensaver build with native wrappers for Windows and macOS, a universal ZIP fallback,
+            and a direct browser launch path for immediate playback.
+          </p>
+        </div>
+
+        <div class="download-deck">
+          <aside class="platform-recommendation" aria-live="polite">
+            <p class="recommendation-label">Recommended for this device</p>
+            <h2 id="os-headline">Universal offline bundle</h2>
+            <p id="os-message">We could not confidently identify your OS, so the ZIP bundle is the safest offline option.</p>
+          </aside>
+
+          <div class="download-grid">
+            <a
+              class="download-button download-button-windows{% if not downloads.windows.available %} is-disabled{% endif %}"
+              href="{{ downloads.windows.href if downloads.windows.available else '#' }}"
+              {% if downloads.windows.available %}download{% else %}aria-disabled="true" tabindex="-1"{% endif %}
+              data-os-target="windows"
+            >
+              <span class="download-label">{{ downloads.windows.label }}</span>
+              <span class="download-meta">{{ downloads.windows.meta }}</span>
+            </a>
+
+            <a
+              class="download-button download-button-macos{% if not downloads.macos.available %} is-disabled{% endif %}"
+              href="{{ downloads.macos.href if downloads.macos.available else '#' }}"
+              {% if downloads.macos.available %}download{% else %}aria-disabled="true" tabindex="-1"{% endif %}
+              data-os-target="macos"
+            >
+              <span class="download-label">{{ downloads.macos.label }}</span>
+              <span class="download-meta">{{ downloads.macos.meta }}</span>
+            </a>
+
+            <a
+              class="download-button download-button-zip{% if not downloads.zip.available %} is-disabled{% endif %}"
+              href="{{ downloads.zip.href if downloads.zip.available else '#' }}"
+              {% if downloads.zip.available %}download{% else %}aria-disabled="true" tabindex="-1"{% endif %}
+              data-os-target="linux"
+            >
+              <span class="download-label">{{ downloads.zip.label }}</span>
+              <span class="download-meta">{{ downloads.zip.meta }}</span>
+            </a>
+
+            <a class="download-button download-button-browser" href="{{ downloads.browser.href }}" data-os-target="browser">
+              <span class="download-label">{{ downloads.browser.label }}</span>
+              <span class="download-meta">{{ downloads.browser.meta }}</span>
+            </a>
+          </div>
+        </div>
+
+        <div class="release-strip">
+          <div>
+            <span class="strip-label">Release</span>
+            <strong>{{ version.tag }} {{ version.name }}</strong>
+          </div>
+          <div>
+            <span class="strip-label">Updated</span>
+            <strong>{{ version.released }}</strong>
+          </div>
+          <div>
+            <span class="strip-label">Mode</span>
+            <strong>Offline-first</strong>
+          </div>
+        </div>
+      </section>
+
+      <section class="gallery-panel" aria-labelledby="gallery-title">
+        <div class="section-heading">
+              {% if downloads.zip.fallback_available %}
+              <span class="download-meta">Stable alias: <span class="download-fallback-path">{{ downloads.zip.fallback_href }}</span></span>
+              {% endif %}
+          <p class="section-kicker">Screenshots</p>
+          <h2 id="gallery-title">Two views of the cinematic grade.</h2>
+        </div>
+
+        <div class="gallery-grid">
+          {% for shot in screenshots %}
+          <figure class="shot-card{% if loop.first %} shot-card-feature{% endif %}">
+            <img src="{{ shot.src }}" alt="{{ shot.alt }}" loading="lazy">
+            <figcaption>{{ shot.caption }}</figcaption>
+          </figure>
+          {% endfor %}
+        </div>
+      </section>
+
+      <section class="instructions-panel" aria-labelledby="instructions-title">
+        <div class="section-heading">
+          <p class="section-kicker">Install</p>
+          <h2 id="instructions-title">Pick your host and go from download to idle screen.</h2>
+        </div>
+
+        <div class="instructions-grid">
+          <article class="instruction-card" data-os-card="windows">
+            <h3>Windows</h3>
+            <ol>
+              {% for step in instructions.windows %}
+              <li>{{ step }}</li>
+              {% endfor %}
+            </ol>
+          </article>
+
+          <article class="instruction-card" data-os-card="macos">
+            <h3>macOS</h3>
+            <ol>
+              {% for step in instructions.macos %}
+              <li>{{ step }}</li>
+              {% endfor %}
+            </ol>
+          </article>
+
+          <article class="instruction-card" data-os-card="linux">
+            <h3>Linux / other</h3>
+            <ol>
+              {% for step in instructions.linux %}
+              <li>{{ step }}</li>
+              {% endfor %}
+            </ol>
+          </article>
+        </div>
+      </section>
+
+      <section class="changelog-panel" aria-labelledby="changelog-title">
+        <div class="section-heading">
+          <p class="section-kicker">Release notes</p>
+          <h2 id="changelog-title">Minimal changelog, clear signal.</h2>
+        </div>
+
+        <ul class="changelog-list">
+          {% for item in changelog %}
+          <li>{{ item }}</li>
+          {% endfor %}
+        </ul>
+      </section>
+    </main>
+  </div>
+
+  <script>
+    window.__PULSE_DOWNLOADS__ = {{ downloads | tojson }};
+  </script>
+  <script src="{{ url_for('static', filename='js/screensaver-download.js') }}?v={{ build_id }}"></script>
+</body>
+</html>

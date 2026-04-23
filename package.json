@@ -1,0 +1,23 @@
+{
+  "name": "pulse-of-humanity",
+  "private": true,
+  "scripts": {
+    "build": "npm run build:screensaver",
+    "build:screensaver": "vite build --config screensaver/vite.config.mjs && node screensaver/scripts/prepare-dist.mjs && node scripts/stamp-release.mjs && node screensaver/scripts/build-zip.mjs",
+    "build:native:assets": "node native/scripts/sync-screensaver-assets.mjs",
+    "build:native:windows": "npm run build:screensaver && npm run build:native:assets && powershell -ExecutionPolicy Bypass -File native/windows-scr/build.ps1",
+    "build:native:macos": "npm run build:screensaver && npm run build:native:assets && bash native/macos-saver/build.sh",
+    "package:artifacts": "node scripts/package-release-artifacts.mjs",
+    "build:release:unix": "bash ./build.sh",
+    "build:release:windows": "powershell -ExecutionPolicy Bypass -File ./build.ps1",
+    "install:native:windows": "powershell -ExecutionPolicy Bypass -File native/windows-scr/install.ps1",
+    "install:native:macos": "bash native/macos-saver/install.sh"
+  },
+  "devDependencies": {
+    "jszip": "3.10.1",
+    "vite": "7.1.3"
+  },
+  "dependencies": {
+    "topojson-client": "3.1.0"
+  }
+}

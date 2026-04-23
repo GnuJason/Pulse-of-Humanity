@@ -231,6 +231,10 @@ node_modules/
 *.zip
 !static/screensaver.zip
 *.tar.gz
+dist/releases/
+native/windows-scr/build/
+native/macos-saver/build/
+static/native/
 state.json
 test_*.py
 run_dev.py

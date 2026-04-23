@@ -1,10 +1,11 @@
+import json
 import os
 import secrets
 import threading
 import time
 from datetime import datetime, timezone
 
-from flask import Flask, jsonify, make_response, request, redirect, send_from_directory
+from flask import Flask, jsonify, make_response, request, redirect, render_template, send_from_directory
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from flask_wtf import CSRFProtect
@@ -68,6 +69,35 @@ def refresh_population_baseline(force=False, now=None, target_year=None):
 UPDATER_ENABLED = os.getenv("RUN_UPDATER", "0") == "1"
 BOOTSTRAP_LOCK = threading.Lock()
 BUILD_ID = str(int(time.time()))
+VERSION_PATH = os.path.join(os.path.dirname(__file__), "VERSION")
+RELEASES_DIR = os.path.join(os.path.dirname(__file__), "dist", "releases")
+
+
+def read_app_version():
+    with open(VERSION_PATH, encoding="utf-8") as version_file:
+        return version_file.read().strip()
+
+
+def read_release_manifest():
+    manifest_path = os.path.join(RELEASES_DIR, "artifact-manifest.json")
+    if not os.path.exists(manifest_path):
+        return None
+
+    with open(manifest_path, encoding="utf-8") as manifest_file:
+        return json.load(manifest_file)
+
+
+def release_month_label():
+    ts = os.path.getmtime(VERSION_PATH)
+    return datetime.fromtimestamp(ts, timezone.utc).strftime("%B %Y")
+
+
+def artifact_href(relative_path):
+    return "/" + relative_path.replace(os.sep, "/")
+
+
+def artifact_exists(relative_path):
+    return os.path.exists(os.path.join(app.root_path, relative_path))
 
 
 def bootstrap_population_system():
@@ -126,11 +156,11 @@ def force_https():
 def add_security_headers(resp):
     csp = (
         "default-src 'self'; "
-        "script-src 'self' https://unpkg.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com 'unsafe-inline'; "
+        "script-src 'self' data: https://unpkg.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com 'unsafe-inline'; "
         "style-src 'self' https://fonts.googleapis.com 'unsafe-inline'; "
         "img-src 'self' data: https:; "
         "font-src 'self' https://fonts.gstatic.com; "
-        "connect-src 'self'; "
+        "connect-src 'self' data:; "
         "frame-ancestors 'none'; "
         "base-uri 'none'; "
         "form-action 'self'"
@@ -237,8 +267,104 @@ def privacy_redirect():
 
 
 @app.route("/screensaver")
-def screensaver_redirect():
-    return redirect("/screensaver/index.html", code=302)
+def screensaver_download():
+    version_value = read_app_version()
+    manifest = read_release_manifest() or {"generatedArtifacts": []}
+    artifact_index = {item["key"]: item for item in manifest.get("generatedArtifacts", [])}
+
+    windows_download = os.path.join(app.static_folder, "native", "windows", "PulseOfHumanity.scr")
+    macos_download = os.path.join(app.static_folder, "native", "macos", "PulseOfHumanity.saver.zip")
+    zip_download = os.path.join(app.static_folder, "screensaver.zip")
+    versioned_zip = artifact_index.get("screensaverZip")
+    versioned_windows = artifact_index.get("windowsScr")
+    versioned_macos = artifact_index.get("macosSaverArchive")
+
+    version = {
+        "tag": f"v{version_value}",
+        "number": version_value,
+        "name": "Cinematic Earth",
+        "released": release_month_label(),
+    }
+
+    downloads = {
+        "windows": {
+            "label": "Download Windows .scr",
+            "href": artifact_href(versioned_windows["path"]) if versioned_windows else "#",
+            "available": bool(versioned_windows and artifact_exists(versioned_windows["path"]) and os.path.exists(windows_download)),
+            "meta": "Offline WebView2 wrapper",
+        },
+        "macos": {
+            "label": "Download macOS .saver",
+            "href": artifact_href(versioned_macos["path"]) if versioned_macos else "#",
+            "available": bool(versioned_macos and artifact_exists(versioned_macos["path"]) and os.path.exists(macos_download)),
+            "meta": "Offline ScreenSaver bundle",
+        },
+        "zip": {
+            "label": "Download ZIP bundle",
+            "href": artifact_href(versioned_zip["path"]) if versioned_zip else "#",
+            "available": bool(versioned_zip and artifact_exists(versioned_zip["path"])),
+            "meta": "Versioned universal offline bundle",
+            "fallback_href": "/static/screensaver.zip",
+            "fallback_available": os.path.exists(zip_download),
+        },
+        "browser": {
+            "label": "Run in Browser",
+            "href": "/screensaver/index.html",
+            "available": True,
+            "meta": "Launch the live cinematic map",
+        },
+    }
+
+    instructions = {
+        "windows": [
+            "Download the .scr build and copy it into your Windows system or personal screensaver folder.",
+            "Open Windows Screen Saver Settings and select Pulse of Humanity from the list.",
+            "Use Preview to test the WebView2 wrapper, then apply to enable full-screen playback.",
+        ],
+        "macos": [
+            "Download the .saver package and unzip it if your browser wraps the bundle in an archive.",
+            "Double-click the .saver bundle or copy it into ~/Library/Screen Savers.",
+            "Enable Pulse of Humanity in System Settings and use the built-in preview before saving.",
+        ],
+        "linux": [
+            "Download the fallback ZIP and extract it anywhere local; no network access is required.",
+            "Launch index.html in a kiosk-capable browser or your preferred screensaver host wrapper.",
+            "For the cleanest result, run the browser in full-screen mode and point it at the bundled entry file.",
+        ],
+    }
+
+    changelog = [
+        "New cinematic download hub with OS-aware recommendations and browser launch path.",
+        f"Versioned release presentation for {version['tag']} {version['name']}.",
+        "Installation instructions for Windows, macOS, and Linux fallback deployments.",
+    ]
+
+    screenshots = [
+        {
+            "src": "/static/screensaver-preview.png",
+            "alt": "Pulse of Humanity counter and map composition",
+            "caption": "The live counter, net change ribbon, and equal-earth projection in motion.",
+        },
+        {
+            "src": "/static/screensaver-cinematic-v2.png",
+            "alt": "Pulse of Humanity version 2 cinematic map view",
+            "caption": f"The {version['tag']} {version['name']} grade with deeper contrast and atmospheric glow.",
+        },
+    ]
+
+    return render_template(
+        "screensaver_download.html",
+        version=version,
+        downloads=downloads,
+        instructions=instructions,
+        changelog=changelog,
+        screenshots=screenshots,
+    )
+
+
+@app.route("/dist/releases/<path:path>")
+def release_artifacts(path):
+    return send_from_directory(RELEASES_DIR, path)
 
 
 @app.route("/screensaver/<path:path>")

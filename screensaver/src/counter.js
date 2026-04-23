@@ -88,5 +88,11 @@ export function createCounter(host) {
     }
   }
 
-  return { tick, root };
+  function destroy() {
+    if (root.parentNode === host) {
+      host.removeChild(root);
+    }
+  }
+
+  return { tick, root, destroy };
 }
