@@ -44,7 +44,7 @@ pulse-of-humanity/
 ├── start.sh              # Startup script
 ├── README.md             # Comprehensive documentation
 ├── DEPLOYMENT.md         # Deployment guide
-├── LICENSE               # GNU General Public License v3.0
+├── LICENSE               # MIT License
 └── docs/                 # Additional documentation
 ```
 

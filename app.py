@@ -1,7 +1,6 @@
 import os
 import secrets
 import threading
-import time
 from datetime import datetime, timezone
 
 from flask import (
@@ -73,7 +72,6 @@ def refresh_population_baseline(force=False, now=None, target_year=None):
 
 UPDATER_ENABLED = os.getenv("RUN_UPDATER", "0") == "1"
 BOOTSTRAP_LOCK = threading.Lock()
-BUILD_ID = str(int(time.time()))
 
 
 def bootstrap_population_system():
@@ -86,11 +84,6 @@ def bootstrap_population_system():
         return start_updater()
 
 app = Flask(__name__)
-
-
-@app.context_processor
-def inject_build_id():
-    return {"build_id": BUILD_ID}
 
 # Configuration
 secret_key = os.getenv('FLASK_SECRET_KEY')
@@ -147,13 +140,19 @@ def add_security_headers(resp):
     resp.headers["X-Frame-Options"] = "DENY"
     resp.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
     resp.headers["Strict-Transport-Security"] = "max-age=63072000; includeSubDomains; preload"
-
+    
+    # Prevent browser caching for dynamic content
+    if request.endpoint in ['index', 'population']:
+        resp.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+        resp.headers["Pragma"] = "no-cache"
+        resp.headers["Expires"] = "0"
+    
     return resp
 
 LIVE_STATE_LIMIT = "120 per minute; 5000 per hour"
 
-@app.route("/pulse")
-def pulse():
+@app.route("/")
+def index():
     try:
         current_state = serialize_current_state(get_current_state())
         authoritative_state = get_authoritative_state()
@@ -182,15 +181,6 @@ def pulse():
             live_anchor=serialize_live_state_contract(fallback_state),
             continents_model_json=serialize_continent_model(fallback_state)
         )
-
-
-@app.route("/home")
-def home_redirect():
-    return redirect("/pulse", code=302)
-
-@app.route("/")
-def root_redirect():
-    return redirect("/pulse", code=302)
 
 @app.route("/population")
 def population():
@@ -391,15 +381,6 @@ def sitemap_xml():
     response = make_response(sitemap_content)
     response.headers['Content-Type'] = 'application/xml'
     return response
-
-
-@app.after_request
-def add_no_cache_headers(response):
-    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
-    response.headers["Pragma"] = "no-cache"
-    response.headers["Expires"] = "0"
-    return response
-
 
 if __name__ == "__main__":
     if bootstrap_population_system():
