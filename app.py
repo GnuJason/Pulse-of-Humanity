@@ -152,8 +152,8 @@ def add_security_headers(resp):
 
 LIVE_STATE_LIMIT = "120 per minute; 5000 per hour"
 
-@app.route("/home")
-def index():
+@app.route("/pulse")
+def pulse():
     try:
         current_state = serialize_current_state(get_current_state())
         authoritative_state = get_authoritative_state()
@@ -183,9 +183,14 @@ def index():
             continents_model_json=serialize_continent_model(fallback_state)
         )
 
+
+@app.route("/home")
+def home_redirect():
+    return redirect("/pulse", code=302)
+
 @app.route("/")
 def root_redirect():
-    return redirect("/home", code=302)
+    return redirect("/pulse", code=302)
 
 @app.route("/population")
 def population():
