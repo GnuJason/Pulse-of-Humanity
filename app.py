@@ -190,7 +190,7 @@ def home_redirect():
 
 @app.route("/")
 def root_redirect():
-    return redirect("/pulse", code=302)
+    return redirect("/screensaver/index.html", code=302)
 
 @app.route("/population")
 def population():
