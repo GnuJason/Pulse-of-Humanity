@@ -57,8 +57,8 @@ python security_audit.py   # security audit
 
 - Follow the existing patterns in the codebase.
 - Keep `app.py` small — extract helpers into modules (`population.py`, `forms.py`, `config.py`) when it clearly reduces complexity.
-- Use CSS variables from the design system in `base.html` rather than hardcoded colors.
-- Tailwind CSS is compiled at build time — run `./tailwindcss-linux-x64 -i input.css -o static/css/main.css --minify` after changing templates.
+- Treat `screensaver/` as the production frontend bundle. Keep changes there self-contained when working on the cinematic UI.
+- Preserve the redirect-based route contract in `app.py` unless the task explicitly changes public routing.
 - Preserve security controls (CSRF, rate limiting, HTTPS redirect, CSP) unless your change explicitly modifies them.
 
 ## Reporting Issues

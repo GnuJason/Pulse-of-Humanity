@@ -1,4 +1,4 @@
-// simulation.js — pure functions mirroring static/js/population_ticker.js math.
+// simulation.js — pure functions for the deterministic population simulation.
 // Inputs: anchor (from anchor.js), authoritative epoch ms.
 // Outputs: numbers. No DOM, no globals, no random.
 

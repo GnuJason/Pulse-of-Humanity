@@ -1,115 +1,56 @@
 # GitHub + Render Deployment Summary
 
-## ✅ Completed Tasks
+## Current Deployment Shape
 
-### 🧹 Cleanup
-- [x] Removed unnecessary files (zip files, test files, caches)
-- [x] Cleaned up __pycache__ and .pyc files
-- [x] Removed hardcoded secrets from .env files
+- Flask remains the only backend service entrypoint.
+- `/` redirects to `/screensaver/index.html` so the cinematic bundle keeps its relative asset paths intact.
+- `/screensaver/<path:path>` serves the static screensaver bundle directly from the repository.
+- Legacy public UI paths now redirect to the cinematic entrypoint instead of rendering Jinja templates.
 
-### 📝 Documentation
-- [x] Comprehensive README.md with deployment instructions
-- [x] .env.example template with all required variables
-- [x] DEPLOYMENT.md guide for Render deployment
-- [x] Environment variable documentation
+## Key Runtime Files
 
-### 🔧 Configuration
-- [x] render.yaml for Render deployment
-- [x] gunicorn.conf.py for production server
-- [x] Enhanced .gitignore with project-specific patterns
-- [x] start.sh startup script
-
-### 🔒 Security
-- [x] Removed all hardcoded secrets
-- [x] Environment variables properly configured
-- [x] validate_env.py script for environment validation
-- [x] HTTPS redirect fixed for localhost testing
-
-### 📱 Mobile Features
-- [x] All mobile responsiveness improvements included
-- [x] Touch-optimized interactions
-- [x] Responsive design features
-- [x] Mobile-friendly tooltips and navigation
-
-### 🗂️ Project Structure
-```
+```text
 pulse-of-humanity/
-├── app.py                 # Main Flask application
-├── requirements.txt       # Python dependencies
-├── render.yaml           # Render deployment config
-├── gunicorn.conf.py      # Production server config
-├── .env.example          # Environment template
-├── .gitignore            # Git ignore patterns
-├── validate_env.py       # Environment validation
-├── start.sh              # Startup script
-├── README.md             # Comprehensive documentation
-├── DEPLOYMENT.md         # Deployment guide
-├── LICENSE               # GNU General Public License v3.0
-└── docs/                 # Additional documentation
+├── app.py
+├── population.py
+├── config.py
+├── requirements.txt
+├── render.yaml
+├── gunicorn.conf.py
+├── start.sh
+├── validate_env.py
+├── security_audit.py
+└── screensaver/
+    ├── index.html
+    ├── src/
+    ├── styles/
+    ├── assets/
+    └── vendor/
 ```
 
-### 📦 Git Status
-- [x] All changes committed
-- [x] Working tree clean
-- [x] Ready for GitHub push
+## Render Configuration Notes
 
-## 🚀 Next Steps
+- Keep `PORT=10000` unless Render overrides it.
+- Set `RUN_UPDATER=1` in production if the annual anchor refresher should run.
+- Set `FLASK_SECRET_KEY` in production.
+- `ADMIN_REANCHOR_TOKEN` remains optional and only affects `POST /admin/reanchor`.
 
-### For GitHub:
-1. Push to GitHub repository
-   ```bash
-   git remote add origin https://github.com/yourusername/pulse-of-humanity.git
-   git branch -M main
-   git push -u origin main
-   ```
+## Verification Commands
 
-### For Render Deployment:
-1. Connect GitHub repository to Render
-2. Set environment variables:
-   - `FLASK_SECRET_KEY`: Generate secure key
-   - `RUN_UPDATER`: Set to `1`
-   - `POP_ANCHOR_MONTH`: Usually `1`
-   - `POP_ANCHOR_DAY`: Usually `1`
-   - `ADMIN_REANCHOR_TOKEN`: Optional secure token for manual re-anchor
-3. Deploy using render.yaml configuration
+Run these before deployment or after a cleanup pass:
 
-### Environment Variables to Set in Render:
-```
-FLASK_DEBUG=0
-FLASK_SECRET_KEY=<generate-64-char-hex-key>
-RUN_UPDATER=1
-POP_ANCHOR_MONTH=1
-POP_ANCHOR_DAY=1
-ADMIN_REANCHOR_TOKEN=<generate-secure-token>
-PORT=10000
-```
-
-## 🔍 Verification Commands
-
-Before deployment, run these checks:
 ```bash
-# Environment validation
 python validate_env.py
-
-# Local production test
+python security_audit.py
 gunicorn --config gunicorn.conf.py app:app
-
-# Health check
+curl -I http://localhost:10000/
+curl -I http://localhost:10000/screensaver/index.html
 curl http://localhost:10000/health
 ```
 
-## 📋 Deployment Checklist
+## Expected Results
 
-- [x] Project cleaned and organized
-- [x] Documentation complete
-- [x] Secrets removed from code
-- [x] .env.example created
-- [x] Render configuration ready
-- [x] Mobile features verified
-- [x] Git repository ready
-- [ ] Push to GitHub
-- [ ] Deploy to Render
-- [ ] Test live deployment
-- [ ] Verify mobile responsiveness on live site
-
-**Status: Ready for GitHub push and Render deployment! 🎉**
+- `GET /` returns `302` with `Location: /screensaver/index.html`.
+- `GET /screensaver/index.html` returns `200`.
+- `GET /pulse`, `/home`, `/about`, `/contact`, `/privacy`, and `/screensaver` all redirect to `/screensaver/index.html`.
+- `GET /health` returns `200` and the API endpoints continue to serve JSON.

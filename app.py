@@ -4,10 +4,7 @@ import threading
 import time
 from datetime import datetime, timezone
 
-from flask import (
-    Flask, jsonify, render_template, make_response,
-    request, flash, redirect, session, send_from_directory,
-)
+from flask import Flask, jsonify, make_response, request, redirect, send_from_directory
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from flask_wtf import CSRFProtect
@@ -33,9 +30,6 @@ from population import (
     utc_now,
 )
 import population as _pop_module
-
-from forms import ContactForm, generate_captcha, send_contact_email
-
 
 def _sync_to_pop():
     """Sync app-level references to the population module (supports test patching)."""
@@ -153,40 +147,13 @@ def add_security_headers(resp):
 LIVE_STATE_LIMIT = "120 per minute; 5000 per hour"
 
 @app.route("/pulse")
-def pulse():
-    try:
-        current_state = serialize_current_state(get_current_state())
-        authoritative_state = get_authoritative_state()
-        return render_template(
-            'index.html',
-            population=current_state["population"],
-            births_today=current_state["births_today"],
-            deaths_today=current_state["deaths_today"],
-            last_updated=current_state["last_updated"],
-            live_anchor=serialize_live_state_contract(authoritative_state),
-            continents_model_json=serialize_continent_model(authoritative_state)
-        )
-    except Exception as e:
-        print(f"[ERROR] Index route failed: {e}")
-        fallback_state = build_initial_state(
-            now=utc_now(),
-            baseline_population=8_000_000_000,
-            source="fallback"
-        )
-        return render_template(
-            'index.html',
-            population=8000000000,
-            births_today=372000,
-            deaths_today=155000,
-            last_updated="Fallback data - service initializing",
-            live_anchor=serialize_live_state_contract(fallback_state),
-            continents_model_json=serialize_continent_model(fallback_state)
-        )
+def pulse_redirect():
+    return redirect("/screensaver/index.html", code=302)
 
 
 @app.route("/home")
 def home_redirect():
-    return redirect("/pulse", code=302)
+    return redirect("/screensaver/index.html", code=302)
 
 @app.route("/")
 def root_redirect():
@@ -237,60 +204,8 @@ def admin_reanchor():
     })
 
 @app.route("/contact", methods=["GET", "POST"])
-@limiter.limit("5 per hour")  # Rate limit for contact form
-def contact():
-    form = ContactForm()
-    
-    # Generate captcha for GET requests
-    if request.method == "GET":
-        captcha_question, captcha_answer = generate_captcha()
-        session['captcha_answer'] = captcha_answer
-        session['captcha_question'] = captcha_question
-    
-    # Get current captcha question
-    captcha_question = session.get('captcha_question', '1 + 1')
-    
-    if request.method == "POST" and form.validate_on_submit():
-        # Validate captcha
-        captcha_valid = False
-        if 'captcha_answer' in session and form.captcha_answer.data is not None:
-            captcha_valid = form.captcha_answer.data == session['captcha_answer']
-        
-        if not captcha_valid:
-            flash('Incorrect captcha answer. Please try again.', 'error')
-            # Generate new captcha
-            captcha_question, captcha_answer = generate_captcha()
-            session['captcha_answer'] = captcha_answer
-            session['captcha_question'] = captcha_question
-        else:
-            # All validation passed, send email
-            name = form.name.data.strip()
-            email = form.email.data.strip()
-            message = form.message.data.strip()
-            
-            success, result = send_contact_email(name, email, message)
-            
-            if success:
-                flash('Thank you for your message! We\'ll get back to you soon.', 'success')
-                # Clear form and generate new captcha
-                form = ContactForm()
-                captcha_question, captcha_answer = generate_captcha()
-                session['captcha_answer'] = captcha_answer
-                session['captcha_question'] = captcha_question
-            else:
-                flash('Sorry, there was an error sending your message. Please try again later.', 'error')
-                # Keep the same captcha since we want user to retry
-    elif request.method == "POST":
-        # Form validation failed, generate new captcha
-        captcha_question, captcha_answer = generate_captcha()
-        session['captcha_answer'] = captcha_answer
-        session['captcha_question'] = captcha_question
-    
-    return render_template(
-        'contact.html',
-        form=form,
-        captcha_question=captcha_question
-    )
+def contact_redirect():
+    return redirect("/screensaver/index.html", code=302)
 
 @app.route("/health")
 def health():
@@ -313,18 +228,17 @@ def health():
     }), 500
 
 @app.route("/about")
-def about():
-    return render_template("about.html")
+def about_redirect():
+    return redirect("/screensaver/index.html", code=302)
 
 @app.route("/privacy")
-def privacy():
-    return render_template("privacy.html")
+def privacy_redirect():
+    return redirect("/screensaver/index.html", code=302)
 
 
 @app.route("/screensaver")
-def screensaver_landing():
-    """Landing page for the Cinematic Earth Screensaver."""
-    return render_template("screensaver.html")
+def screensaver_redirect():
+    return redirect("/screensaver/index.html", code=302)
 
 
 @app.route("/screensaver/<path:path>")
