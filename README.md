@@ -1,11 +1,19 @@
+<p align="center">
+  <img src="assets/branding/pulseofhumanity_gif.jpg" style="max-width: 100%; height: auto;" />
+</p>
+
 # Pulse of Humanity
 
-> Cinematic world population visualization served by Flask and driven by a deterministic UN WPP-based simulation.
+> Real-time world population visualization anchored to fixed UN WPP-based annual rates with deterministic browser-side simulation.
 
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 [![Python 3.11+](https://img.shields.io/badge/Python-3.11+-3776AB.svg?logo=python&logoColor=white)](https://www.python.org/)
 [![Flask 3.x](https://img.shields.io/badge/Flask-3.x-000000.svg?logo=flask)](https://flask.palletsprojects.com/)
 [![Deploy on Render](https://img.shields.io/badge/Deploy-Render-46E3B7.svg?logo=render)](https://render.com)
+[![Tests](https://img.shields.io/badge/Tests-10%20passing-brightgreen.svg)]()
+
+
+<!-- TOPIC TAGS: flask, population, data-visualization, real-time, tailwindcss, python, demographics, open-data -->
 
 ---
 
@@ -13,49 +21,51 @@
 
 ![Pulse of Humanity — main view](assets/screenshots/version_2.0.png)
 
-*The current production UI: cinematic counter, continent hover detail, and Equal Earth map rendered from the isolated screensaver bundle.*
+*Live counter, continental breakdown, and interactive SVG world map with VANTA.js globe background.*
 
 ---
 
 ## Cinematic Earth Screensaver (v2.0.0)
 
-- Live app: [pulseofhumanity.org](https://pulseofhumanity.org/)
-- Static entrypoint: [/screensaver/index.html](https://pulseofhumanity.org/screensaver/index.html)
+- Live demo: [/screensaver](https://pulseofhumanity.org/screensaver)
 - Download: [/static/screensaver.zip](https://pulseofhumanity.org/static/screensaver.zip)
-- Fully offline, deterministic, and standalone on the frontend side
+- Fully offline, deterministic, and standalone
 
 ---
 
 ## Features
 
-- **Cinematic Homepage** — `/` redirects to the static screensaver bundle entrypoint without rewriting asset paths
-- **Deterministic Population Simulation** — the browser animates from a fixed server anchor derived from UN WPP rates
-- **Interactive Globe Experience** — Equal Earth projection, continent hover panel, and motion-aware counter system
-- **Standalone Frontend Bundle** — screensaver assets, styles, and modules live under `screensaver/` and can be served statically
-- **Flask JSON Surface** — `/api/live-state`, `/population`, and `/health` remain available for backend consumers and verification
-- **Deployment Hardening** — HTTPS redirect behavior, CSP/HSTS headers, and rate limiting remain in `app.py`
+- **Real-time Population Counter** — live-updating display driven by a deterministic annual demographic anchor
+- **Interactive World Map** — embedded SVG with per-continent population, births, and deaths tooltips
+- **Continental Breakdown** — stat cards showing population share by continent
+- **VANTA.js Globe** — animated 3D globe background for cinematic atmosphere
+- **Contact Form** — server-side validation, math captcha, rate limiting, CSRF protection, SMTP email
+- **Mobile Responsive** — touch-optimized with adaptive layouts for all screen sizes
+- **Keyboard Accessible** — Enter/Space activation on interactive SVG continents
+- **Security** — HTTPS redirect, CSP headers, HSTS, rate limiting, input sanitization
 
 ## Tech Stack
 
 | Layer | Technology |
 |-------|-----------|
 | Backend | Python 3.11+ / Flask 3.x |
-| Frontend | Static HTML, CSS, and ES modules in `screensaver/` |
-| Visualization | TopoJSON world data, Equal Earth SVG rendering, cinematic overlays |
-| Security | Flask-Limiter, Flask-WTF support code, security headers |
+| Frontend | HTML5, Tailwind CSS (compiled), vanilla JS |
+| Fonts | JetBrains Mono (display) + Instrument Sans (body) |
+| Visualization | Embedded SVG world map, VANTA.js 3D globe |
+| Security | Flask-WTF (CSRF), Flask-Limiter, security headers |
 | Deployment | Gunicorn, Render-ready (`render.yaml`) |
 
-## Routes
+## API Endpoints
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
-| `/` | GET | Redirects to `/screensaver/index.html` |
-| `/screensaver/index.html` | GET | Current cinematic homepage |
-| `/screensaver/<path:path>` | GET | Serves the static screensaver bundle |
-| `/pulse`, `/home`, `/about`, `/contact`, `/privacy`, `/screensaver` | GET/POST | Legacy public paths redirected to `/screensaver/index.html` |
-| `/api/live-state` | GET | JSON anchor for the population simulation |
-| `/population` | GET | JSON snapshot of current population state |
+| `/` | GET | Main population visualization |
+| `/api/live-state` | GET | JSON — authoritative ticker anchor: `baselinePopulation`, `baselineTimestamp`, `birthsPerSecond`, `deathsPerSecond`, `serverTimestamp`, `source`, `lastAnchorYear` |
+| `/population` | GET | JSON — current population and data source |
 | `/health` | GET | Health check for uptime monitoring |
+| `/contact` | GET/POST | Contact form with CSRF + captcha |
+| `/about` | GET | About page |
+| `/privacy` | GET | Privacy policy |
 
 ## Development Setup
 
@@ -86,6 +96,7 @@ gunicorn --config gunicorn.conf.py app:app
 python validate_env.py      # check environment variables
 python security_audit.py    # run security checks
 ./venv/bin/python -m pytest tests/test_population_model.py -v
+node --test tests/population_ticker.test.cjs
 ```
 
 ### Environment Variables
@@ -98,6 +109,11 @@ python security_audit.py    # run security checks
 | `POP_ANCHOR_MONTH` | No | `1` | Month for yearly authoritative re-anchor |
 | `POP_ANCHOR_DAY` | No | `1` | Day for yearly authoritative re-anchor |
 | `ADMIN_REANCHOR_TOKEN` | No | — | Token required for `POST /admin/reanchor` |
+| `SMTP_SERVER` | No | `smtp.mailfence.com` | SMTP server for contact form |
+| `SMTP_PORT` | No | `587` | SMTP port |
+| `SMTP_USERNAME` | No | — | SMTP username |
+| `SMTP_PASSWORD` | No | — | SMTP password |
+| `RECIPIENT_EMAIL` | No | — | Contact form recipient |
 | `DOMAIN` | No | `localhost:5000` | Production domain |
 
 ## Deployment (Render)
@@ -124,5 +140,7 @@ This project is licensed under the **GNU General Public License v3.0** — see [
 - [United Nations World Population Prospects 2024 Revision](https://population.un.org/wpp/) — source basis for the fixed annual anchor values used by the application.
 - The live ticker is computed locally from a deterministic annual anchor using fixed UN WPP-based demographic rates; normal operation does not require external API calls or live population feeds.
 - Deprecated sources no longer used: API Ninjas, Worldometer scraping, hourly refresh APIs, and snapshot-based population feeds.
+- [VANTA.js](https://www.vantajs.com/) — animated 3D backgrounds
+- [Tailwind CSS](https://tailwindcss.com/) — utility-first CSS
 - [Natural Earth](https://www.naturalearthdata.com/) — geographic data
-- [TopoJSON](https://github.com/topojson/topojson) — compact geographic geometry for the screensaver bundle
+- [JetBrains Mono](https://www.jetbrains.com/lp/mono/) & [Instrument Sans](https://fonts.google.com/specimen/Instrument+Sans) — typography

@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+
+{% block title %}Cinematic Earth Screensaver | Pulse of Humanity{% endblock %}
+
+{% block content %}
+  <div class="container mx-auto px-4 py-12 sm:py-16 max-w-3xl">
+    <header class="text-center mb-10 reveal">
+      <a href="/" class="heading-xl text-[var(--accent)] hover:opacity-80 transition-opacity inline-block mb-3">
+        Pulse of Humanity
+      </a>
+      <h1 class="heading-lg" style="color: var(--text-primary);">Cinematic Earth Screensaver</h1>
+      <p class="body-md mt-3" style="color: var(--text-secondary);">
+        <em>A living, ambient visualization of humanity.</em>
+      </p>
+    </header>
+
+    <div class="rounded-xl overflow-hidden mb-8 reveal reveal-delay-1"
+         style="background: var(--bg-card); border: 1px solid var(--border-color);">
+      <a href="/screensaver/index.html" aria-label="Open the live screensaver in a new tab" target="_blank" rel="noopener">
+        <img src="{{ url_for('static', filename='screensaver-preview.png') }}"
+             alt="Preview of the Cinematic Earth Screensaver showing a world map with continent-tinted land and an ambient counter overlay."
+             style="display: block; width: 100%; height: auto;"
+             loading="lazy"
+             onerror="this.style.display='none'" />
+      </a>
+    </div>
+
+    <div class="rounded-xl p-6 sm:p-10 mb-8 reveal reveal-delay-2"
+         style="background: var(--bg-card); border: 1px solid var(--border-color);">
+      <div class="flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center mb-8">
+        <a href="/screensaver/index.html"
+           target="_blank" rel="noopener"
+           class="inline-flex items-center justify-center px-6 py-3 rounded-lg font-semibold transition-colors"
+           style="background: var(--accent); color: #000;">
+          View Live Screensaver
+        </a>
+        <a href="{{ url_for('static', filename='screensaver.zip') }}"
+           download
+           class="inline-flex items-center justify-center px-6 py-3 rounded-lg font-semibold transition-colors border"
+           style="border-color: var(--accent); color: var(--accent);">
+          Download Screensaver (.zip)
+        </a>
+      </div>
+
+      <section>
+        <h2 class="heading-md text-[var(--accent)] mb-4">What's inside</h2>
+        <ul class="space-y-3" style="color: var(--text-secondary);">
+          <li class="flex items-start">
+            <span class="text-[var(--accent)] mr-2 mt-0.5 opacity-60">&bull;</span>
+            Cinematic Earth palette with Equal Earth projection
+          </li>
+          <li class="flex items-start">
+            <span class="text-[var(--accent)] mr-2 mt-0.5 opacity-60">&bull;</span>
+            Real-time population simulation (births, deaths, net)
+          </li>
+          <li class="flex items-start">
+            <span class="text-[var(--accent)] mr-2 mt-0.5 opacity-60">&bull;</span>
+            Continent hover engine with glass micro-panel
+          </li>
+          <li class="flex items-start">
+            <span class="text-[var(--accent)] mr-2 mt-0.5 opacity-60">&bull;</span>
+            Elevation shading and ambient vignette
+          </li>
+          <li class="flex items-start">
+            <span class="text-[var(--accent)] mr-2 mt-0.5 opacity-60">&bull;</span>
+            Offline, deterministic, and standalone &mdash; no backend, no CDN
+          </li>
+          <li class="flex items-start">
+            <span class="text-[var(--accent)] mr-2 mt-0.5 opacity-60">&bull;</span>
+            Runs on Windows, macOS, Linux, TVs, and tablets
+          </li>
+        </ul>
+      </section>
+    </div>
+
+    <div class="text-center reveal reveal-delay-3">
+      <a href="/" class="body-md hover:text-[var(--accent)] transition-colors" style="color: var(--text-secondary);">
+        &larr; Back to the live counter
+      </a>
+    </div>
+  </div>
+{% endblock %}

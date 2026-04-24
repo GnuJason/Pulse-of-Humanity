@@ -139,19 +139,9 @@ export function createHoverEngine({ svg, hoverLayer, continentGroups, panelHost 
     if (key) positionPanel(window.innerWidth / 2, window.innerHeight / 2);
   }
 
-  function destroy() {
-    svg.removeEventListener("pointermove", onPointerMove);
-    svg.removeEventListener("pointerleave", onPointerLeave);
-    setActive(null);
-    if (panel.parentNode === panelHost) {
-      panelHost.removeChild(panel);
-    }
-  }
-
   return {
     update: updatePanelNumbers, // call each RAF tick
     activateByKey,
-    destroy,
     get active() { return activeKey; },
   };
 }

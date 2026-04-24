@@ -1,0 +1,396 @@
+{% extends "base.html" %}
+
+{% block title %}Pulse of Humanity | Live World Population{% endblock %}
+
+{% block body_class %}min-h-screen flex flex-col items-center overflow-x-hidden relative{% endblock %}
+
+{% block extra_styles %}
+    @keyframes counterPulse {
+      0%, 100% { text-shadow: 0 0 20px var(--accent-glow); }
+      50% { text-shadow: 0 0 50px var(--accent-glow), 0 0 80px var(--accent-dim); }
+    }
+    .counter {
+      font-size: clamp(2.5rem, 10vw, 10rem);
+      color: var(--accent);
+      text-shadow: 0 0 20px var(--accent-glow);
+      animation: heroIn 0.7s cubic-bezier(0.16, 1, 0.3, 1) forwards,
+                 counterPulse 3s ease-in-out 0.7s infinite;
+      opacity: 0;
+      transform: translateY(8px);
+      font-family: var(--font-display);
+      font-weight: 800;
+      letter-spacing: -0.04em;
+      transition: all 0.3s ease-out;
+    }
+    .particle {
+      position: absolute;
+      background: var(--accent-glow);
+      border-radius: 50%;
+      pointer-events: none;
+      z-index: 5;
+    }
+    .attribution {
+      position: relative;
+      background: linear-gradient(to top, rgba(0, 255, 204, 0.03), transparent);
+      border-top: 1px solid var(--border-color);
+    }
+    .attribution::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      pointer-events: none;
+    }
+    .continent path {
+      stroke: var(--accent);
+      stroke-width: 2;
+      fill: rgba(0, 255, 204, 0.12);
+      cursor: pointer;
+      transition: fill 0.2s ease;
+    }
+    .continent:hover path,
+    .continent:focus path {
+      fill: rgba(0, 255, 204, 0.28);
+    }
+    .continent:focus {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
+      border-radius: 2px;
+    }
+
+    /* Mobile styles */
+    @media (max-width: 768px) {
+      .world-map svg {
+        height: auto;
+        max-height: 40vh;
+      }
+      .continent path {
+        stroke-width: 1.5;
+      }
+      #region-tooltip {
+        font-size: 0.875rem;
+        padding: 0.75rem;
+        max-width: calc(100vw - 20px);
+      }
+    }
+
+    .continent {
+      transition: all 0.2s ease;
+    }
+    .continent:hover, .continent:active {
+      filter: brightness(1.2);
+    }
+
+    @media (prefers-contrast: high) {
+      .continent path {
+        stroke: #ffffff;
+        stroke-width: 2;
+      }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .counter { opacity: 1; transform: none; }
+    }
+{% endblock %}
+
+{% block head_extra %}
+  <script src="https://unpkg.com/feather-icons@4.29.2/dist/feather.min.js"></script>
+{% endblock %}
+
+{% block body %}
+  <div id="vanta-bg" class="absolute inset-0 z-0 opacity-20"></div>
+
+  <main id="main-content" class="z-10 text-center px-4 pt-16 sm:pt-24 w-full max-w-6xl mx-auto">
+    <h1 class="heading-xl text-[var(--accent)] mb-8 reveal-hero"
+        style="--hero-delay: 0ms;">
+      Pulse of Humanity
+    </h1>
+
+    <p class="text-xs sm:text-sm tracking-[0.3em] uppercase reveal reveal-fade"
+       style="color: var(--text-muted); font-family: var(--font-body);">
+      Current World Population
+    </p>
+    <div class="counter" id="population-counter" aria-live="polite" role="status">Loading&hellip;</div>
+    <div class="text-xs sm:text-sm mt-4 flex items-center justify-center gap-2 reveal reveal-delay-1" style="color: var(--text-muted);">
+      <i data-feather="clock" class="w-3 h-3 sm:w-4 sm:h-4"></i>
+      <span id="last-updated">Updating&hellip;</span>
+    </div>
+
+    <!-- Stats cards -->
+    <div class="grid grid-cols-2 gap-3 sm:gap-4 mt-6 max-w-md mx-auto">
+      <div class="rounded-lg p-3 sm:p-4 min-h-16 flex flex-col justify-center reveal-scale reveal-delay-2"
+           style="background: var(--bg-card); border: 1px solid var(--border-color);">
+        <span id="births-today" class="font-bold text-lg sm:text-xl" style="color: var(--success); font-family: var(--font-display);">0</span>
+        <span class="text-xs sm:text-sm" style="color: var(--text-secondary);">births today</span>
+      </div>
+      <div class="rounded-lg p-3 sm:p-4 min-h-16 flex flex-col justify-center reveal-scale reveal-delay-2"
+           style="background: var(--bg-card); border: 1px solid var(--border-color);">
+        <span id="deaths-today" class="font-bold text-lg sm:text-xl" style="color: var(--danger); font-family: var(--font-display);">0</span>
+        <span class="text-xs sm:text-sm" style="color: var(--text-secondary);">deaths today</span>
+      </div>
+    </div>
+
+    <!-- World map -->
+    <div id="world-map" class="mt-6 sm:mt-8 flex justify-center relative z-10 world-map reveal-fade reveal-delay-3">
+      {% include "partials/world-map.svg" %}
+    </div>
+
+    <div id="region-tooltip" class="hidden fixed p-3 rounded text-sm pointer-events-none z-50 max-w-xs"
+         style="color: var(--accent); font-family: var(--font-body); background: var(--bg-card); border: 1px solid var(--border-color); backdrop-filter: blur(12px);"></div>
+  </main>
+
+{% endblock %}
+
+{% block footer_class %}attribution reveal reveal-delay-4{% endblock %}
+
+{% block footer_content %}
+  <p class="mb-1">Data from
+    <a href="https://population.un.org/wpp/" target="_blank" rel="noopener" class="hover:text-[var(--accent)] transition-colors">UN World Population Prospects</a>
+  </p>
+  <p class="mb-1">
+    <a href="/about" class="hover:text-[var(--accent)] transition-colors">About</a>
+    <span class="mx-1 opacity-30">/</span>
+    <a href="/screensaver" class="hover:text-[var(--accent)] transition-colors">Screensaver</a>
+    <span class="mx-1 opacity-30">/</span>
+    <a href="/privacy" class="hover:text-[var(--accent)] transition-colors">Privacy</a>
+    <span class="mx-1 opacity-30">/</span>
+    <a href="/contact" class="hover:text-[var(--accent)] transition-colors">Contact</a>
+  </p>
+  <p class="mt-1 opacity-50">&copy; <span id="current-year"></span> Pulse of Humanity</p>
+{% endblock %}
+
+{% block scripts %}
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r134/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/vanta@0.5.24/dist/vanta.globe.min.js"></script>
+  <script src="{{ url_for('static', filename='js/population_ticker.js') }}"></script>
+  <script>
+  document.addEventListener("DOMContentLoaded", function () {
+    document.getElementById('current-year').textContent = new Date().getFullYear();
+    if (window.feather) feather.replace();
+
+    const ticker = window.PopulationTicker;
+    const liveStateUrl = "{{ url_for('live_state') }}";
+    const initialAnchor = {{ live_anchor | tojson | safe }};
+    const continentsModel = {{ continents_model_json | tojson | safe }};
+    const liveContinents = {};
+    let currentAnchor = null;
+    let currentStatusText = {{ last_updated | tojson }};
+    let activeTooltipRegionId = null;
+
+    const tooltip = document.getElementById('region-tooltip');
+
+    function fmt(x) {
+      return x.toLocaleString('en-US');
+    }
+
+    function setAnchor(snapshot, requestStartedAtMs, responseReceivedAtMs) {
+      const clockOffsetMs = ticker.computeClockOffset(
+        snapshot.serverTimestamp,
+        requestStartedAtMs,
+        responseReceivedAtMs
+      );
+
+      currentAnchor = ticker.normalizeAnchor(snapshot, clockOffsetMs);
+      currentStatusText = 'Source: ' + snapshot.source + ' | Anchor: ' + snapshot.baselineTimestamp;
+    }
+
+    function updateTooltip(regionId) {
+      const c = liveContinents[regionId];
+      if (!c) {
+        tooltip.innerHTML = '<strong>' + regionId + '</strong><br>No data';
+        return;
+      }
+      tooltip.innerHTML =
+        '<strong>' + regionId.replace(/_/g, " ") + '</strong><br>' +
+        'Pop: ' + fmt(Math.floor(c.population)) + '<br>' +
+        'Births today: ' + fmt(Math.floor(c.birthsToday)) + '<br>' +
+        'Deaths today: ' + fmt(Math.floor(c.deathsToday));
+    }
+
+    function showTooltip(e, regionId) {
+      activeTooltipRegionId = regionId;
+      updateTooltip(regionId);
+      var viewportWidth = window.innerWidth;
+      var viewportHeight = window.innerHeight;
+      var clientX = e.touches ? e.touches[0].clientX : e.clientX;
+      var clientY = e.touches ? e.touches[0].clientY : e.clientY;
+      var left = clientX + 10;
+      var top = clientY + 10;
+
+      if (viewportWidth < 768) {
+        left = 10;
+        top = 10;
+      } else {
+        var tooltipRect = tooltip.getBoundingClientRect();
+        if (left + tooltipRect.width > viewportWidth) left = clientX - tooltipRect.width - 10;
+        if (top + tooltipRect.height > viewportHeight) top = clientY - tooltipRect.height - 10;
+      }
+
+      tooltip.style.left = left + 'px';
+      tooltip.style.top = top + 'px';
+      tooltip.classList.remove('hidden');
+    }
+
+    /* Keyboard-accessible continent interaction */
+    document.querySelectorAll('.continent').forEach(function(cont) {
+      /* Mouse events */
+      cont.addEventListener('mousemove', function(e) { showTooltip(e, e.currentTarget.id); });
+      cont.addEventListener('mouseleave', function() {
+        activeTooltipRegionId = null;
+        tooltip.classList.add('hidden');
+      });
+
+      /* Touch events */
+      cont.addEventListener('touchstart', function(e) {
+        e.preventDefault();
+        showTooltip(e, e.currentTarget.id);
+      }, { passive: false });
+      cont.addEventListener('touchend', function() {
+        setTimeout(function() {
+          activeTooltipRegionId = null;
+          tooltip.classList.add('hidden');
+        }, 2000);
+      });
+
+      /* Keyboard events */
+      cont.addEventListener('focus', function(e) {
+        updateTooltip(e.currentTarget.id);
+        /* Position tooltip centrally below the map on keyboard focus */
+        tooltip.style.left = '50%';
+        tooltip.style.top = 'auto';
+        tooltip.style.bottom = '120px';
+        tooltip.style.transform = 'translateX(-50%)';
+        tooltip.classList.remove('hidden');
+      });
+      cont.addEventListener('blur', function() {
+        activeTooltipRegionId = null;
+        tooltip.classList.add('hidden');
+        tooltip.style.transform = '';
+      });
+      cont.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          updateTooltip(e.currentTarget.id);
+          tooltip.style.left = '50%';
+          tooltip.style.top = 'auto';
+          tooltip.style.bottom = '120px';
+          tooltip.style.transform = 'translateX(-50%)';
+          tooltip.classList.toggle('hidden');
+        }
+        if (e.key === 'Escape') {
+          tooltip.classList.add('hidden');
+          e.currentTarget.blur();
+        }
+      });
+    });
+
+    /* VANTA.js globe — mobile-optimized */
+    var isMobile = window.innerWidth <= 768;
+    try {
+      VANTA.GLOBE({
+        el: "#vanta-bg",
+        mouseControls: !isMobile,
+        touchControls: isMobile,
+        minHeight: 200.00,
+        minWidth: 200.00,
+        scale: isMobile ? 0.8 : 1.0,
+        scaleMobile: 0.8,
+        color: 0x00ffcc,
+        color2: 0x00ffcc,
+        backgroundColor: 0x000000,
+        size: isMobile ? 0.8 : 1.0,
+        points: isMobile ? 8.0 : 12.0
+      });
+    } catch (err) {
+      console.warn("VANTA.js init failed:", err);
+    }
+
+    /* --- Polling with visibility-awareness --- */
+    var pollIntervalId = null;
+    var POLL_MS = 5000;
+
+    async function fetchLiveState() {
+      var requestStartedAtMs = Date.now();
+      try {
+        var response = await fetch(liveStateUrl, {
+          headers: { "Accept": "application/json" },
+          cache: "no-store"
+        });
+        if (!response.ok) throw new Error("HTTP " + response.status);
+        var snapshot = await response.json();
+        setAnchor(snapshot, requestStartedAtMs, Date.now());
+      } catch (err) {
+        console.error("Live state fetch failed", err);
+      }
+    }
+
+    function startPolling() {
+      if (!pollIntervalId) {
+        fetchLiveState();
+        pollIntervalId = setInterval(fetchLiveState, POLL_MS);
+      }
+    }
+
+    function stopPolling() {
+      if (pollIntervalId) {
+        clearInterval(pollIntervalId);
+        pollIntervalId = null;
+      }
+    }
+
+    document.addEventListener('visibilitychange', function () {
+      if (document.hidden) {
+        stopPolling();
+      } else {
+        fetchLiveState();
+        startPolling();
+      }
+    });
+
+    window.addEventListener('online', fetchLiveState);
+
+    setAnchor(initialAnchor, Date.now(), Date.now());
+
+    startPolling();
+
+    /* --- Render loop --- */
+    function renderLoop() {
+      if (!currentAnchor) {
+        requestAnimationFrame(renderLoop);
+        return;
+      }
+
+      var authoritativeNowMs = ticker.getAuthoritativeNow(currentAnchor.clockOffsetMs, Date.now());
+      var dailyCounts = ticker.computeDailyCounts(currentAnchor, authoritativeNowMs);
+
+      document.getElementById('population-counter').textContent = fmt(Math.floor(ticker.computeWorldPopulation(currentAnchor, authoritativeNowMs)));
+      document.getElementById('births-today').textContent = fmt(Math.floor(dailyCounts.birthsToday));
+      document.getElementById('deaths-today').textContent = fmt(Math.floor(dailyCounts.deathsToday));
+      document.getElementById('last-updated').textContent = currentStatusText;
+
+      for (var name in continentsModel) {
+        if (!continentsModel.hasOwnProperty(name)) continue;
+        liveContinents[name] = ticker.computeContinentState(currentAnchor, continentsModel[name], authoritativeNowMs);
+      }
+
+      if (activeTooltipRegionId && !tooltip.classList.contains('hidden')) {
+        updateTooltip(activeTooltipRegionId);
+      }
+
+      if (!document.hidden) {
+        requestAnimationFrame(renderLoop);
+      } else {
+        /* Resume render loop when tab becomes visible again */
+        document.addEventListener('visibilitychange', function resumeRender() {
+          if (!document.hidden) {
+            document.removeEventListener('visibilitychange', resumeRender);
+            requestAnimationFrame(renderLoop);
+          }
+        });
+      }
+    }
+
+    requestAnimationFrame(renderLoop);
+  });
+  </script>
+{% endblock %}

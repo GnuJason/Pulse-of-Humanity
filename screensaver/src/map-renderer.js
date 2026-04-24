@@ -108,7 +108,11 @@ function buildGraticule(project, stepDeg = 30) {
 }
 
 // --- Public API -------------------------------------------------------------
-function buildMap(host, featureCollection, options = {}) {
+/**
+ * Renders the map into `host` (an HTMLElement). Returns metadata used by the
+ * hover engine: { svg, continentGroups, allPaths }.
+ */
+export function renderMap(host, featureCollection, options = {}) {
   const width  = options.width  || host.clientWidth  || 1600;
   const height = options.height || host.clientHeight || 900;
   const project = makeFitted(width, height, options.padding ?? 8);
@@ -234,29 +238,4 @@ function buildMap(host, featureCollection, options = {}) {
   host.appendChild(svg);
 
   return { svg, hoverLayer, continentGroups, allPaths, width, height };
-}
-
-/**
- * Renders the map into `host` (an HTMLElement). Returns metadata used by the
- * hover engine: { svg, continentGroups, allPaths }.
- */
-export function renderMap(host, featureCollection, options = {}) {
-  let currentOptions = { ...options };
-  const mapInfo = buildMap(host, featureCollection, currentOptions);
-
-  function resize(nextOptions = {}) {
-    currentOptions = { ...currentOptions, ...nextOptions };
-    const nextMap = buildMap(host, featureCollection, currentOptions);
-    Object.assign(mapInfo, nextMap);
-    return mapInfo;
-  }
-
-  function destroy() {
-    while (host.firstChild) host.removeChild(host.firstChild);
-  }
-
-  mapInfo.resize = resize;
-  mapInfo.destroy = destroy;
-
-  return mapInfo;
 }

@@ -235,12 +235,11 @@ class PopulationModelTests(unittest.TestCase):
             places=6,
         )
 
-    def test_root_route_redirects_to_screensaver_entrypoint(self):
+    def test_index_route_renders_successfully(self):
         with humanity_app.app.test_client() as client:
-            response = client.get("/", follow_redirects=False)
+            response = client.get("/")
 
-        self.assertEqual(response.status_code, 302)
-        self.assertEqual(response.headers["Location"], "/screensaver/index.html")
+        self.assertEqual(response.status_code, 200)
 
     def test_restart_behavior_preserves_deterministic_state(self):
         state = humanity_app.build_initial_state(now=self.fixed_time("2026-03-30T00:00:00Z"))
