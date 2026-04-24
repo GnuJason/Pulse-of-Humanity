@@ -2,7 +2,7 @@ services:
   - type: web
     name: pulse-of-humanity
     env: python
-    buildCommand: pip install --upgrade pip && pip install -r requirements.txt
+    buildCommand: pip install --upgrade pip && pip install -r requirements.txt && npm install && npm run build && bash build.sh --web-only
     startCommand: gunicorn --config gunicorn.conf.py app:app
     envVars:
       - key: FLASK_DEBUG
