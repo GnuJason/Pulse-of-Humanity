@@ -1,139 +1,87 @@
-name: screensaver-packaging
+name: screensaver-validation
 
 on:
   workflow_dispatch:
   push:
-    branches:
-      - main
-      - master
+    branches: [main, master]
 
 jobs:
-  web-and-tests:
+  web-and-contracts:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
-
-      - name: Setup Python
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: "3.11"
+      - name: Validate screensaver monorepo
+        run: bash tools/release/ci/verify-web.sh
 
-      - name: Install Python dependencies
-        run: python -m pip install --upgrade pip && pip install -r requirements.txt
-
-      - name: Install Node dependencies
-        run: npm ci
-
-      - name: Run tests
-        run: python -m unittest discover -s tests
-
-      - name: Build reproducible screensaver package
-        env:
-          SOURCE_DATE_EPOCH: '1767225600'
-        run: bash ./build.sh --web-only
-
-      - name: Upload web artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: screensaver-web-artifacts
-          path: |
-            dist/releases/*
-            static/screensaver.zip
-
-  windows-native:
+  windows-wrapper:
     runs-on: windows-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
-
-      - name: Setup Python
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
-
-      - name: Install Python dependencies
-        shell: pwsh
-        run: python -m pip install --upgrade pip; pip install -r requirements.txt
-
+          python-version: "3.11"
       - name: Install Node dependencies
         shell: pwsh
         run: npm ci
-
-      - name: Run tests
+      - name: Validate contracts and wrapper layout
         shell: pwsh
-        run: python -m unittest discover -s tests
-
+        run: npm run test:monorepo
       - name: Fetch WebView2 SDK
         shell: pwsh
         run: |
           nuget install Microsoft.Web.WebView2 -ExcludeVersion -OutputDirectory "$env:RUNNER_TEMP\webview2"
           "WEBVIEW2_SDK_DIR=$env:RUNNER_TEMP\webview2\Microsoft.Web.WebView2\build\native" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-
       - name: Setup MSVC environment
         uses: ilammy/msvc-dev-cmd@v1
-
-      - name: Build Windows package
+      - name: Build Windows wrapper
         shell: pwsh
-        env:
-          SOURCE_DATE_EPOCH: '1767225600'
-        run: ./build.ps1
+        run: npm run build:native:windows
 
-      - name: Upload Windows artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: screensaver-windows-artifacts
-          path: |
-            dist/releases/*
-            static/native/windows/*
-
-  macos-native:
+  macos-wrapper:
     runs-on: macos-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
-
-      - name: Setup Python
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
-
-      - name: Install Python dependencies
-        run: python -m pip install --upgrade pip && pip install -r requirements.txt
-
+          python-version: "3.11"
       - name: Install Node dependencies
         run: npm ci
+      - name: Validate contracts and wrapper layout
+        run: npm run test:monorepo
+      - name: Build macOS wrapper
+        run: npm run build:native:macos
 
-      - name: Run tests
-        run: python -m unittest discover -s tests
-
-      - name: Build macOS package
-        env:
-          SOURCE_DATE_EPOCH: '1767225600'
-        run: bash ./build.sh --include-macos
-
-      - name: Upload macOS artifacts
-        uses: actions/upload-artifact@v4
+  linux-placeholder:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
-          name: screensaver-macos-artifacts
-          path: |
-            dist/releases/*
-            static/native/macos/*
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install Node dependencies
+        run: npm ci
+      - name: Prepare Linux placeholder
+        run: |
+          chmod +x apps/native/linux/run-screensaver.sh
+          npm run build:screensaver
+          npm run test:monorepo
+          test -f apps/native/linux/pulse-of-humanity.xml

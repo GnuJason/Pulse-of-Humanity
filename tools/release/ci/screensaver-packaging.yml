@@ -1,0 +1,103 @@
+name: screensaver-packaging-template
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - master
+
+jobs:
+  web-and-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Node dependencies
+        run: npm ci
+
+      - name: Build screensaver runtime
+        run: npm run build:screensaver
+
+      - name: Run monorepo tests
+        run: npm run test:monorepo
+
+  windows-native:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Node dependencies
+        shell: pwsh
+        run: npm ci
+
+      - name: Run monorepo tests
+        shell: pwsh
+        run: npm run test:monorepo
+
+      - name: Fetch WebView2 SDK
+        shell: pwsh
+        run: |
+          nuget install Microsoft.Web.WebView2 -ExcludeVersion -OutputDirectory "$env:RUNNER_TEMP\webview2"
+          "WEBVIEW2_SDK_DIR=$env:RUNNER_TEMP\webview2\Microsoft.Web.WebView2\build\native" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Setup MSVC environment
+        uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Build Windows wrapper
+        shell: pwsh
+        env:
+          SOURCE_DATE_EPOCH: '1767225600'
+        run: npm run build:native:windows
+
+  macos-native:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Node dependencies
+        run: npm ci
+
+      - name: Run monorepo tests
+        run: npm run test:monorepo
+
+      - name: Build macOS wrapper
+        env:
+          SOURCE_DATE_EPOCH: '1767225600'
+        run: npm run build:native:macos

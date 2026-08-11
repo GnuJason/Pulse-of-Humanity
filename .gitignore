@@ -221,7 +221,7 @@ $RECYCLE.BIN/
 
 # Application-specific
 uploads/
-static/uploads/
+apps/download-site/static/uploads/
 logs/
 *.pid
 .sass-cache/
@@ -229,14 +229,13 @@ node_modules/
 
 # Project-specific files
 *.zip
-!static/screensaver.zip
 *.tar.gz
-dist/releases/
-native/windows-scr/build/
-native/macos-saver/build/
-static/native/
-state.json
-test_*.py
+/dist/
+/apps/native/*/build/
+/apps/native/*/generated-assets/
+/apps/download-site/static/native/
+/apps/download-site/state.json
+/apps/download-site/state.json.tmp
 run_dev.py
 
 # Shapefile data (large binary files)

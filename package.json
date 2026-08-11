@@ -1,17 +1,23 @@
 {
   "name": "pulse-of-humanity",
   "private": true,
+  "type": "module",
   "scripts": {
     "build": "npm run build:screensaver",
-    "build:screensaver": "vite build --config screensaver/vite.config.mjs && node screensaver/scripts/prepare-dist.mjs && node scripts/stamp-release.mjs && node screensaver/scripts/build-zip.mjs",
-    "build:native:assets": "node native/scripts/sync-screensaver-assets.mjs",
-    "build:native:windows": "npm run build:screensaver && npm run build:native:assets && powershell -ExecutionPolicy Bypass -File native/windows-scr/build.ps1",
-    "build:native:macos": "npm run build:screensaver && npm run build:native:assets && bash native/macos-saver/build.sh",
-    "package:artifacts": "node scripts/package-release-artifacts.mjs",
-    "build:release:unix": "bash ./build.sh",
-    "build:release:windows": "powershell -ExecutionPolicy Bypass -File ./build.ps1",
-    "install:native:windows": "powershell -ExecutionPolicy Bypass -File native/windows-scr/install.ps1",
-    "install:native:macos": "bash native/macos-saver/install.sh"
+    "generate:population-contract": "node tools/generate-population-contract/generate.mjs",
+    "build:screensaver": "npm run generate:population-contract && vite build --config apps/screensaver-web/vite.config.mjs && node tools/release/screensaver-scripts/prepare-dist.mjs",
+    "sync:native-assets": "node tools/release/sync-native-assets.mjs",
+    "test:population-contract": "python3 -m unittest discover -s tests/population-contract",
+    "test:screensaver": "node tests/screensaver/test-population.mjs",
+    "test:native-smoke": "node tests/native-smoke/verify-layout.mjs",
+    "test:monorepo": "npm run test:population-contract && npm run test:screensaver && npm run test:native-smoke",
+    "build:native:windows": "npm run build:screensaver && npm run sync:native-assets && powershell -ExecutionPolicy Bypass -File apps/native/windows/build.ps1",
+    "build:native:macos": "npm run build:screensaver && npm run sync:native-assets && bash apps/native/macos/build.sh",
+    "package:artifacts": "node tools/release/package-release-artifacts.mjs",
+    "build:release:unix": "bash tools/release/build.sh",
+    "build:release:windows": "powershell -ExecutionPolicy Bypass -File tools/release/build.ps1",
+    "install:native:windows": "powershell -ExecutionPolicy Bypass -File apps/native/windows/install.ps1",
+    "install:native:macos": "bash apps/native/macos/install.sh"
   },
   "devDependencies": {
     "jszip": "3.10.1",

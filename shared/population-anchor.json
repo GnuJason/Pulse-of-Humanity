@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "baselinePopulation": 8130371000,
+  "baselineTimestamp": "2026-01-01T00:00:00Z",
+  "birthsPerSecond": 4.28,
+  "deathsPerSecond": 2.06,
+  "source": "UN WPP 2024 Medium Variant (static)",
+  "lastAnchorYear": 2026,
+  "continents": {
+    "Africa": { "populationShare": 0.1787512340601262 },
+    "Asia": { "populationShare": 0.5916414085088684 },
+    "Europe": { "populationShare": 0.09441086305992581 },
+    "North_America": { "populationShare": 0.07552869044794065 },
+    "South_America": { "populationShare": 0.054128894821024134 },
+    "Oceania": { "populationShare": 0.005538770632848981 },
+    "Antarctica": { "populationShare": 1.3846926582122452e-7 }
+  }
+}
