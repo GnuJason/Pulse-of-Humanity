@@ -22,8 +22,17 @@ if (-not $WebView2Sdk) {
   throw "Set WEBVIEW2_SDK_DIR to the installed WebView2 SDK root before building."
 }
 
-$includeDir = Join-Path $WebView2Sdk "include"
-$libDir = Join-Path $WebView2Sdk "lib\$Arch"
+$nativeBuildDir = Join-Path $WebView2Sdk "build\native"
+$includeDir = if (Test-Path (Join-Path $nativeBuildDir "include")) {
+  Join-Path $nativeBuildDir "include"
+} else {
+  Join-Path $WebView2Sdk "include"
+}
+$libDir = if (Test-Path (Join-Path $nativeBuildDir $Arch)) {
+  Join-Path $nativeBuildDir $Arch
+} else {
+  Join-Path $WebView2Sdk "lib\$Arch"
+}
 $loaderLib = Join-Path $libDir "WebView2LoaderStatic.lib"
 if (-not (Test-Path $loaderLib)) {
   $loaderLib = Join-Path $libDir "WebView2Loader.lib"
@@ -47,8 +56,10 @@ try {
     /DUNICODE `
     /D_UNICODE `
     /DWIN32_LEAN_AND_MEAN `
-    /I $includeDir `
-    $sourceFile `
+    /I "$env:WEBVIEW2_SDK_DIR" `
+    /I "$env:WEBVIEW2_SDK_DIR\build\native\include" `
+    /I "$PSScriptRoot\src" `
+    "$PSScriptRoot\src\PulseOfHumanityScr.cpp" `
     /Fe:PulseOfHumanity.scr `
     /link `
     /SUBSYSTEM:WINDOWS `
@@ -56,6 +67,7 @@ try {
     gdi32.lib `
     ole32.lib `
     shell32.lib `
+    advapi32.lib `
     $loaderLib
 }
 finally {

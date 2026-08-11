@@ -123,7 +123,23 @@ class ScreensaverApp {
     }
 
     MSG message = {};
+    static POINT initialMousePos = {};
+    static bool mouseInitialized = false;
     while (GetMessageW(&message, nullptr, 0, 0) > 0) {
+      if (options_.mode == AppMode::Fullscreen) {
+        if (!mouseInitialized) {
+          GetCursorPos(&initialMousePos);
+          mouseInitialized = true;
+        }
+
+        POINT currentPos = {};
+        GetCursorPos(&currentPos);
+        if (abs(currentPos.x - initialMousePos.x) > 3 ||
+            abs(currentPos.y - initialMousePos.y) > 3) {
+          PostQuitMessage(0);
+        }
+      }
+
       TranslateMessage(&message);
       DispatchMessageW(&message);
     }
@@ -144,24 +160,6 @@ class ScreensaverApp {
     webview_.Reset();
     controller_.Reset();
     PostQuitMessage(0);
-  }
-
-  void MaybeExitFromMouseMove() {
-    if (options_.mode != AppMode::Fullscreen) {
-      return;
-    }
-
-    POINT cursor = {};
-    GetCursorPos(&cursor);
-    if (!hasMouseAnchor_) {
-      hasMouseAnchor_ = true;
-      mouseAnchor_ = cursor;
-      return;
-    }
-
-    if (cursor.x != mouseAnchor_.x || cursor.y != mouseAnchor_.y) {
-      DestroyWindow(window_);
-    }
   }
 
   void MaybeExitFromInput() {
@@ -191,10 +189,14 @@ class ScreensaverApp {
         app->OnSize();
         return 0;
       case WM_MOUSEMOVE:
-        app->MaybeExitFromMouseMove();
+        app->MaybeExitFromInput();
         return 0;
       case WM_KEYDOWN:
       case WM_SYSKEYDOWN:
+        if (wParam == VK_ESCAPE) {
+          PostQuitMessage(0);
+          return 0;
+        }
       case WM_LBUTTONDOWN:
       case WM_RBUTTONDOWN:
       case WM_MBUTTONDOWN:
@@ -203,6 +205,10 @@ class ScreensaverApp {
       case WM_TOUCH:
       case WM_POINTERDOWN:
         app->MaybeExitFromInput();
+        return 0;
+      case WM_CLOSE:
+        DestroyWindow(hwnd);
+        PostQuitMessage(0);
         return 0;
       case WM_DESTROY:
         app->OnDestroy();
@@ -320,10 +326,13 @@ class ScreensaverApp {
                         ResizeWebView();
 
                         if (webview_) {
-                          webview_->SetVirtualHostNameToFolderMapping(
-                              L"screensaver.local",
-                              assetDirectory.c_str(),
-                              COREWEBVIEW2_HOST_RESOURCE_ACCESS_KIND_ALLOW);
+                          ComPtr<ICoreWebView2_3> webview3;
+                          if (SUCCEEDED(webview_.As(&webview3)) && webview3) {
+                            webview3->SetVirtualHostNameToFolderMapping(
+                                L"screensaver.local",
+                                assetDirectory.c_str(),
+                                COREWEBVIEW2_HOST_RESOURCE_ACCESS_KIND_ALLOW);
+                          }
                           webview_->AddScriptToExecuteOnDocumentCreated(BootstrapScript().c_str(), nullptr);
 
                           ComPtr<ICoreWebView2Settings> settings;
@@ -347,8 +356,6 @@ class ScreensaverApp {
   CommandLineOptions options_;
   HINSTANCE instance_ = nullptr;
   HWND window_ = nullptr;
-  POINT mouseAnchor_ = {};
-  bool hasMouseAnchor_ = false;
   ComPtr<ICoreWebView2Controller> controller_;
   ComPtr<ICoreWebView2> webview_;
 };
